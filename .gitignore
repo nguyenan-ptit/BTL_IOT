@@ -1,4 +1,24 @@
-# Local environment configuration and secrets
+# Merge these rules into the group repository's existing .gitignore.
+*.bak
+firmware/**/config.h
+firmware/**/secrets.h
 .env
 .env.*
 !.env.example
+backend/settings.local.json
+mqtt_passwords
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+__pycache__/
+.venv/
+.idea/
+node_modules/
+test-output/
+build/
+*.bin
+*.elf
+*.map
+*.hex

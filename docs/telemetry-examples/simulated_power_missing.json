@@ -1,0 +1,26 @@
+{
+  "schema_version": 6,
+  "test": true,
+  "device_id": "demo_node_01",
+  "room": "demo_room_01",
+  "boot_id": "0000000000000003",
+  "seq": 10,
+  "uptime_s": 600,
+  "system_state": "fault",
+  "led": "yellow",
+  "buzzer_cmd": false,
+  "temperature": {"value_c": 31.5, "health": "ok", "alarm": false},
+  "mq2": {
+    "mode": "analog", "do_level": null, "adc_raw": 38,
+    "adc_on": 60, "adc_off": 55, "health": "ok", "alarm": false,
+    "diagnostics": "limited_analog", "warmup_remaining_s": 0
+  },
+  "flame": {
+    "do_level": null, "health": "power_missing", "alarm": false,
+    "alarm_level": 0, "diagnostics": "limited_do",
+    "power_adc": null, "power_mode": "digital_d1", "power_level": 0,
+    "power_health": "missing", "power_adc_min": null, "power_adc_zero": null
+  },
+  "network": {"wifi": true, "mqtt": true},
+  "limits": {"temperature_on_c": 60.0, "temperature_off_c": 55.0}
+}
