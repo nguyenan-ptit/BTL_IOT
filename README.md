@@ -56,3 +56,16 @@ Mỗi người commit bằng tài khoản GitHub của mình, mô tả đúng th
 ## Thông tin không đưa lên GitHub
 
 Không commit `config.h`, `.env` thật, token bot, file mật khẩu broker, database thật, log chứa dữ liệu cá nhân, `.venv`, cache hay `.bak`. `.gitignore` chỉ giúp bỏ qua file chưa được theo dõi; vẫn kiểm tra danh sách file trước khi commit. Không đưa mật khẩu/token vào nội dung commit hoặc ảnh chụp.
+
+## Chạy frontend
+
+Xem [frontend/README.md](frontend/README.md). Tóm tắt:
+
+```powershell
+cd frontend
+npm install
+copy .env.example .env.local
+npm run dev
+```
+
+Mở http://localhost:5173. Mặc định chạy với dữ liệu giả lập (ghi rõ là mô phỏng), không cần backend.
