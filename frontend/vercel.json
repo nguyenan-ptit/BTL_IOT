@@ -3,5 +3,5 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!assets/|mockServiceWorker\\.js|favicon\\.png).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!assets/|mockServiceWorker\\.js|favicon\\.svg).*)", "destination": "/index.html" }]
 }
