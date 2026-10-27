@@ -1,5 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router'
+import { usePermission } from '@/features/auth/hooks'
+import { useThresholds } from '@/features/thresholds/api'
 import { useRooms } from '@/features/rooms/hooks'
 import { formatDateTime, formatTime } from '@/shared/lib/datetime'
 import { cn } from '@/shared/ui/cn'
@@ -34,6 +36,9 @@ export default function HistoryPage() {
     range &&
     'from' in range &&
     Date.parse(range.to) - Date.parse(range.from) > 31 * 86_400_000
+  const canSeeThresholds = usePermission('thresholds:manage')
+  const thresholds = useThresholds(canSeeThresholds)
+  const roomThreshold = thresholds.data?.find((t) => t.roomId === roomId)?.desired
   const history = useMeasurements(tooLong ? null : roomId, range ?? { preset: '24h' })
   const ready = !!roomId && !!range && !tooLong
   const resolved = range ? resolveRange(range) : null
@@ -133,7 +138,7 @@ export default function HistoryPage() {
           {(data) => (
             <div className="flex flex-col gap-5">
               <Sheet className="p-4">
-                <HistoryChart data={data} spanMs={spanMs} />
+                <HistoryChart data={data} spanMs={spanMs} thresholds={roomThreshold} />
               </Sheet>
 
               {data.incidents.length > 0 && (

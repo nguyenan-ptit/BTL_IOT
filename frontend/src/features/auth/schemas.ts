@@ -6,6 +6,7 @@ export const permissionSchema = z.enum([
   'users:manage',
   'audit:read',
   'incidents:acknowledge',
+  'thresholds:manage',
 ])
 export type Permission = z.infer<typeof permissionSchema>
 

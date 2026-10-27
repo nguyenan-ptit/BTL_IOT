@@ -3,6 +3,7 @@ import type { AuditLogEntry } from '@/features/audit/schemas'
 import type { Measurement } from '@/features/history/schemas'
 import type { IncidentTimelineEntry } from '@/features/incidents/schemas'
 import type { NodeHistoryEntry } from '@/features/nodes/schemas'
+import type { ThresholdValues } from '@/features/thresholds/schemas'
 import type { BoardingHouse, Room } from '@/features/rooms/schemas'
 import type {
   HazardSign,
@@ -40,6 +41,22 @@ export type MockIncident = {
   events: Omit<IncidentTimelineEntry, 'count'>[]
 }
 
+export type MockThreshold = {
+  desired: ThresholdValues
+  /** Ngưỡng node đang dùng, như node báo trong telemetry. */
+  reported: ThresholdValues
+  updatedAt: string | null
+  updatedBy: { id: string; displayName: string } | null
+}
+
+/** Ngưỡng mặc định của bản giả lập. Firmware V6 mặc định 60/55 cho cả hai, nhưng số gas giả ở đây cao hơn. */
+export const DEFAULT_THRESHOLDS: ThresholdValues = {
+  gasOn: 400,
+  gasOff: 350,
+  tempOn: 60,
+  tempOff: 55,
+}
+
 export const db = {
   users: [] as MockUser[],
   boardingHouses: [] as BoardingHouse[],
@@ -50,6 +67,21 @@ export const db = {
   measurements: new Map<string, Measurement[]>(),
   incidents: [] as MockIncident[],
   auditLog: [] as AuditLogEntry[],
+  thresholds: new Map<string, MockThreshold>(),
+}
+
+export function thresholdOf(roomId: string): MockThreshold {
+  let t = db.thresholds.get(roomId)
+  if (!t) {
+    t = {
+      desired: { ...DEFAULT_THRESHOLDS },
+      reported: { ...DEFAULT_THRESHOLDS },
+      updatedAt: null,
+      updatedBy: null,
+    }
+    db.thresholds.set(roomId, t)
+  }
+  return t
 }
 
 // Phiên đăng nhập giả, thay cho cookie phiên của backend. Lưu ở sessionStorage để tải lại trang
@@ -83,8 +115,16 @@ export function nextId(prefix: string): string {
 export const OFFLINE_AFTER_MS = 10_000
 
 export function permissionsFor(role: Role): Permission[] {
-  if (role === 'admin')
-    return ['nodes:manage', 'users:manage', 'audit:read', 'incidents:acknowledge']
+  if (role === 'admin') {
+    return [
+      'nodes:manage',
+      'users:manage',
+      'audit:read',
+      'incidents:acknowledge',
+      'thresholds:manage',
+    ]
+  }
+  if (role === 'landlord') return ['incidents:acknowledge', 'thresholds:manage']
   return ['incidents:acknowledge']
 }
 

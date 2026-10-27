@@ -210,4 +210,5 @@ export function seed(now = new Date()) {
   }
 
   db.auditLog = []
+  db.thresholds = new Map()
 }

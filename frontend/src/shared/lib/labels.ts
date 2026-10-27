@@ -69,4 +69,5 @@ export const auditActionLabel: Record<AuditAction, string> = {
   node_assigned: 'Gán phòng cho node',
   node_transitioned: 'Chuyển trạng thái node',
   incident_acknowledged: 'Tiếp nhận sự cố',
+  threshold_updated: 'Đổi ngưỡng cảnh báo',
 }

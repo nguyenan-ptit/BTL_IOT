@@ -33,6 +33,7 @@ export const auditActionSchema = z.enum([
   'node_assigned',
   'node_transitioned',
   'incident_acknowledged',
+  'threshold_updated',
 ])
 export type AuditAction = z.infer<typeof auditActionSchema>
 
