@@ -1,14 +1,14 @@
 import type { Measurement } from '@/features/history/schemas'
 import type { HazardSign, SensorKind } from '@/shared/schemas/common'
-import { db, nextId, nodeOfRoom } from './db'
+import { connectivityOf, db, nextId, nodeOfRoom, thresholdOf } from './db'
 import { baselineMeasurement } from './seed'
 
 // Bộ mô phỏng node: sinh số đo mỗi 2 giây và mở/cập nhật/đóng sự cố như backend sẽ làm.
-// Ngưỡng ở đây chỉ để demo; ngưỡng thật do node và backend quyết định.
+// Ngưỡng lấy theo phòng (US7), có trễ: bật khi ≥ ngưỡng bật, chỉ tắt khi ≤ ngưỡng tắt.
 
 export const TICK_MS = 2_000
-const GAS_THRESHOLD = 400
-const TEMP_THRESHOLD = 50
+/** Bản giả lập coi như node nhận ngưỡng mới sau chừng này (firmware V6 thật chưa nhận lệnh). */
+export const APPLY_DELAY_MS = 4_000
 /** Số lần đo bình thường liên tiếp để coi là "bình thường ổn định" (khoảng 20 giây). */
 const STABLE_TICKS = 10
 
@@ -21,6 +21,10 @@ type RoomSim = {
   normalStreak: number
   gas: number
   temperature: number
+  /** Mức gas mô phỏng muốn đạt; null là mức nền. */
+  gasTarget: number | null
+  /** Dấu hiệu nguy hiểm đang bật (giữ giữa các lần đo để có trễ bật/tắt). */
+  active: Set<HazardSign>
 }
 
 const sims = new Map<string, RoomSim>()
@@ -36,26 +40,34 @@ function simOf(roomId: string): RoomSim {
       normalStreak: 0,
       gas: 200,
       temperature: 29.5,
+      gasTarget: null,
+      active: new Set(),
     }
     sims.set(roomId, sim)
   }
   return sim
 }
 
-function hazardsOf(m: Measurement): HazardSign[] {
-  const signs: HazardSign[] = []
-  if (m.gas !== null && m.gas > GAS_THRESHOLD) signs.push('gas')
-  if (m.temperature !== null && m.temperature > TEMP_THRESHOLD) signs.push('high_temperature')
-  if (m.flame === true) signs.push('flame')
-  return signs
+/** Cập nhật dấu hiệu nguy hiểm theo ngưỡng node đang dùng. Cảm biến lỗi (null) giữ nguyên trạng thái cũ. */
+function evaluateHazards(roomId: string, m: Measurement): HazardSign[] {
+  const { active } = simOf(roomId)
+  const t = thresholdOf(roomId).reported
+  const step = (sign: HazardSign, value: number | null, on: number, off: number) => {
+    if (value === null) return
+    if (value >= on) active.add(sign)
+    else if (value <= off) active.delete(sign)
+  }
+  step('gas', m.gas, t.gasOn, t.gasOff)
+  step('high_temperature', m.temperature, t.tempOn, t.tempOff)
+  if (m.flame === true) active.add('flame')
+  else if (m.flame === false) active.delete('flame')
+  return [...active]
 }
 
 export function currentHazards(roomId: string): HazardSign[] {
-  const list = db.measurements.get(roomId)
-  const last = list?.[list.length - 1]
   const node = nodeOfRoom(roomId)
-  if (!last || !node || node.lifecycle !== 'active') return []
-  return hazardsOf(last)
+  if (!node || node.lifecycle !== 'active') return []
+  return [...simOf(roomId).active]
 }
 
 function nextMeasurement(roomId: string, at: Date): Measurement {
@@ -63,7 +75,7 @@ function nextMeasurement(roomId: string, at: Date): Measurement {
   const node = nodeOfRoom(roomId)
   const base = baselineMeasurement(at, Math.random, roomId === 'r102' ? 1 : 0)
   // Gas và nhiệt độ đi dần về mục tiêu, không nhảy đột ngột.
-  const gasTarget = sim.gasLeak ? 720 : (base.gas ?? 200)
+  const gasTarget = sim.gasLeak ? 720 : (sim.gasTarget ?? base.gas ?? 200)
   const tempTarget = sim.fire ? 68 : (base.temperature ?? 29.5)
   sim.gas += (gasTarget - sim.gas) * 0.35
   sim.temperature += (tempTarget - sim.temperature) * 0.25
@@ -78,7 +90,7 @@ function nextMeasurement(roomId: string, at: Date): Measurement {
 
 function recordIncident(roomId: string, m: Measurement) {
   const sim = simOf(roomId)
-  const signs = hazardsOf(m)
+  const signs = evaluateHazards(roomId, m)
   const active = db.incidents.find((i) => i.roomId === roomId && i.status !== 'resolved')
 
   if (signs.length > 0) {
@@ -126,6 +138,15 @@ function tick() {
       continue
     }
     node.lastSeenAt = now.toISOString()
+    // Node "nhận" ngưỡng mới sau APPLY_DELAY_MS khi đang có kết nối.
+    const t = thresholdOf(room.id)
+    if (
+      t.updatedAt &&
+      now.getTime() - Date.parse(t.updatedAt) >= APPLY_DELAY_MS &&
+      connectivityOf(node) === 'online'
+    ) {
+      t.reported = { ...t.desired }
+    }
     const list = db.measurements.get(room.id)
     if (list) list.push(m)
     else db.measurements.set(room.id, [m])
@@ -150,8 +171,13 @@ export const scenarios = {
   fire(roomId: string) {
     simOf(roomId).fire = true
   },
+  /** Đưa gas về một mức cụ thể, để thử ngưỡng vừa đặt. */
+  gasLevel(roomId: string, value: number | null) {
+    simOf(roomId).gasTarget = value
+  },
   recover(roomId: string) {
     const sim = simOf(roomId)
+    sim.gasTarget = null
     sim.gasLeak = false
     sim.fire = false
     const node = nodeOfRoom(roomId)

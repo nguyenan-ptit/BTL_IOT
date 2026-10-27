@@ -1,4 +1,4 @@
-import { Flame, Thermometer, TriangleAlert, Wind } from 'lucide-react'
+import { Flame, Thermometer, TriangleAlert, WifiOff, Wind } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { formatRelative, formatTime } from '@/shared/lib/datetime'
 import { hazardSignLabel } from '@/shared/lib/labels'
@@ -58,13 +58,13 @@ function SensorCell({ sensor, stale }: { sensor: SensorReading; stale: boolean }
   )
 }
 
-function footerText(status: RoomStatus, overall: RoomOverall, now: Date): ReactNode {
+function footerText(status: RoomStatus, offline: boolean, now: Date): ReactNode {
   const node = status.node
   if (!node) return 'Phòng chưa gắn node.'
   if (node.lifecycle === 'registered') return `${node.code} mới đăng ký, chưa kích hoạt.`
   if (!node.lastSeenAt) return `${node.code} chưa gửi dữ liệu.`
   const when = `${formatTime(node.lastSeenAt)} (${formatRelative(node.lastSeenAt, now)})`
-  if (overall === 'offline') return `Mất tín hiệu từ ${when}. Số đo bên trên là số đo cũ.`
+  if (offline) return `Mất tín hiệu từ ${when}. Số đo bên trên là số đo cũ.`
   return `${node.code} · nhận lúc ${when}`
 }
 
@@ -81,7 +81,8 @@ export function RoomCard({
   notice?: ReactNode
 }) {
   const style = roomStatusStyle[overall]
-  const stale = overall === 'offline'
+  // Node mất kết nối thì số đo là số đo cũ, kể cả khi phòng đang cảnh báo hoặc bảo trì (lỗi A).
+  const stale = status.node?.connectivity === 'offline' && status.node.lastSeenAt !== null
   const faulty = status.sensors.filter((s) => s.health === 'fault')
 
   return (
@@ -99,6 +100,14 @@ export function RoomCard({
           <StatusPill status={overall} />
         </header>
 
+        {stale && overall !== 'offline' && (
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-offline-ink">
+            <WifiOff aria-hidden className="size-4 shrink-0" />
+            {overall === 'alarm'
+              ? 'Node mất kết nối, cảnh báo vẫn được giữ cho tới khi có số đo mới.'
+              : 'Node mất kết nối.'}
+          </p>
+        )}
         {overall === 'alarm' && status.hazardSigns.length > 0 && !notice && (
           <p className="text-sm font-semibold text-alarm-deep">
             Phát hiện: {status.hazardSigns.map((s) => hazardSignLabel[s]).join(', ')}
@@ -129,7 +138,7 @@ export function RoomCard({
             stale ? 'font-semibold text-offline-ink' : 'text-ink-soft',
           )}
         >
-          {footerText(status, overall, now)}
+          {footerText(status, stale, now)}
         </p>
       </div>
     </article>

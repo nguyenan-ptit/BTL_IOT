@@ -5,6 +5,7 @@ import { measurementHandlers } from './handlers/measurements'
 import { nodeHandlers } from './handlers/nodes'
 import { userHandlers } from './handlers/users'
 import { auditHandlers } from './handlers/audit'
+import { thresholdHandlers } from './handlers/thresholds'
 import { roomHandlers } from './handlers/rooms'
 import { seed } from './seed'
 import { scenarios, startSimulator } from './simulator'
@@ -17,6 +18,7 @@ export const handlers = [
   ...nodeHandlers,
   ...userHandlers,
   ...auditHandlers,
+  ...thresholdHandlers,
 ]
 
 export async function startMockApi() {

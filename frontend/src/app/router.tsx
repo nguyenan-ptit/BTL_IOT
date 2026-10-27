@@ -17,6 +17,7 @@ const NodeListPage = lazy(() => import('@/features/nodes/pages/NodeListPage'))
 const NodeDetailPage = lazy(() => import('@/features/nodes/pages/NodeDetailPage'))
 const AccountListPage = lazy(() => import('@/features/accounts/pages/AccountListPage'))
 const AuditLogPage = lazy(() => import('@/features/audit/pages/AuditLogPage'))
+const ThresholdsPage = lazy(() => import('@/features/thresholds/pages/ThresholdsPage'))
 
 function page(node: ReactNode) {
   return <Suspense fallback={<p role="status">Đang tải…</p>}>{node}</Suspense>
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
           { path: 'su-co', element: page(<IncidentListPage />) },
           { path: 'su-co/:id', element: page(<IncidentDetailPage />) },
           { path: 'lich-su', element: page(<HistoryPage />) },
+          { path: 'nguong-canh-bao', element: guarded('thresholds:manage', <ThresholdsPage />) },
           {
             path: 'quan-tri',
             element: <AdminLayout />,

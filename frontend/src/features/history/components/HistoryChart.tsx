@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import {
   CartesianGrid,
+  ReferenceLine,
   ComposedChart,
   Line,
   ReferenceArea,
@@ -11,6 +12,7 @@ import {
 } from 'recharts'
 import { formatDate, formatDateTime, formatTime } from '@/shared/lib/datetime'
 import { formatInteger, formatTemperature } from '@/shared/lib/number'
+import type { ThresholdValues } from '@/features/thresholds/schemas'
 import type { MeasurementHistory } from '../schemas'
 
 /** Recharts vẽ SVG bằng thuộc tính, không đọc được var(--...), nên lấy giá trị màu thật từ theme. */
@@ -20,7 +22,16 @@ function themeColor(name: string): string {
 
 type Point = { t: number; gas: number | null; temperature: number | null; backfill: boolean }
 
-export function HistoryChart({ data, spanMs }: { data: MeasurementHistory; spanMs: number }) {
+export function HistoryChart({
+  data,
+  spanMs,
+  thresholds,
+}: {
+  data: MeasurementHistory
+  spanMs: number
+  /** Ngưỡng bật cảnh báo đang đặt của phòng (FR-044); không có với người thuê. */
+  thresholds?: ThresholdValues
+}) {
   const colors = useMemo(
     () => ({
       gas: themeColor('board-800'),
@@ -69,6 +80,12 @@ export function HistoryChart({ data, spanMs }: { data: MeasurementHistory; spanM
           <span aria-hidden className="size-2.5 rounded-full border-2 border-ink bg-sheet" />
           Số đo gửi bù
         </span>
+        {thresholds && (
+          <span className="flex items-center gap-2">
+            <span aria-hidden className="w-5 border-t-2 border-dotted border-alarm" />
+            Ngưỡng bật cảnh báo
+          </span>
+        )}
       </figcaption>
       <div
         className="h-72 w-full sm:h-80"
@@ -151,6 +168,36 @@ export function HistoryChart({ data, spanMs }: { data: MeasurementHistory; spanM
                 ifOverflow="hidden"
               />
             ))}
+            {thresholds && (
+              <ReferenceLine
+                yAxisId="gas"
+                y={thresholds.gasOn}
+                stroke={colors.alarm}
+                strokeDasharray="2 3"
+                ifOverflow="extendDomain"
+                label={{
+                  value: `Ngưỡng gas ${formatInteger(thresholds.gasOn)}`,
+                  position: 'insideTopLeft',
+                  fontSize: 11,
+                  fill: colors.alarm,
+                }}
+              />
+            )}
+            {thresholds && (
+              <ReferenceLine
+                yAxisId="temp"
+                y={thresholds.tempOn}
+                stroke={colors.temp}
+                strokeDasharray="2 3"
+                ifOverflow="extendDomain"
+                label={{
+                  value: `Ngưỡng ${formatTemperature(thresholds.tempOn)}`,
+                  position: 'insideTopRight',
+                  fontSize: 11,
+                  fill: colors.temp,
+                }}
+              />
+            )}
             <Tooltip
               labelFormatter={(t) => formatDateTime(new Date(Number(t)))}
               formatter={(value, name) =>
