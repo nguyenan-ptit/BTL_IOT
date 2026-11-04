@@ -14,7 +14,12 @@ Phía nhận đăng ký `iot/devices/+/telemetry`. ID trong topic phải khớp 
 
 DEVICE_ID và ROOM_ID là chuỗi ASCII 1–32 ký tự chữ/số/gạch dưới/gạch ngang. DEVICE_ID cũng là MQTT client ID và phải riêng cho từng bo; ROOM_ID biểu diễn vị trí và có thể trùng. Tài khoản MQTT độc lập với ID. Cấu hình kết nối thật được giữ cục bộ, không nằm trong repo công khai; xem [config.example.h](../firmware/node_full/config.example.h).
 
-Firmware dùng IPv4 và TCP MQTT thông thường, cổng mẫu 1884; chưa có TLS/hostname cho cloud. Máy broker và tài khoản/xác thực do Long cấu hình. Không đưa broker này ra Internet trước khi có thiết kế bảo mật phù hợp.
+Firmware có hai chế độ cấu hình, dùng cùng topic và payload trong tài liệu này:
+
+- Mặc định `MQTT_USE_TLS=0` (hoặc cấu hình cũ không khai báo macro): IPv4 và TCP MQTT trong LAN, cổng mẫu 1884; có thể dùng signed discovery bên dưới.
+- Cloud opt-in `MQTT_USE_TLS=1`: hostname DNS chính xác do nhà cung cấp cấp, cổng TLS của dịch vụ (thường 8883), TLS 1.2 với CA PEM trong `mqtt_ca.h` và thời gian SNTP để kiểm tra hạn chứng chỉ. `MQTT_HOST` không chứa `mqtts://`, đường dẫn, `:port` hoặc IP literal. Hostname được giữ cho DNS, SNI và kiểm tra tên chứng chỉ. Thiếu/sai CA hoặc hostname làm cấu hình mạng không được bật; đồng hồ chưa sẵn sàng thì chờ trước khi nối. Không có fallback sang TCP thường và không chạy signed LAN discovery trong chế độ này.
+
+Máy broker, thông tin truy cập và phân quyền publish/subscribe do Long/nhóm cấu hình. Hướng dẫn dịch vụ và cấu hình cloud nằm trong [CLOUD_MQTT](CLOUD_MQTT.md); hỗ trợ transport không chứng minh dịch vụ đã được triển khai hoặc đã nhận telemetry thật.
 
 ## 2. Telemetry schema 6
 
@@ -84,7 +89,7 @@ Xem [đoạn ACK kết thúc](../examples/ack-output-test-completed-fragment.jso
 
 ## 5. Thời gian, vòng đời và khuyến nghị phía nhận
 
-ESP chưa có timestamp UTC cho thời điểm lấy mẫu. Long cần tạo received_at bằng đồng hồ server lúc nhận, lưu ISO 8601 UTC và chỉ đổi múi giờ khi hiển thị. Không đổi uptime_s thành thời gian đo tuyệt đối nếu chưa có cơ chế đồng bộ phù hợp.
+Telemetry chưa có timestamp UTC cho thời điểm lấy mẫu. SNTP trong chế độ TLS phục vụ kiểm tra chứng chỉ, không bổ sung timestamp đo vào payload. Long cần tạo received_at bằng đồng hồ server lúc nhận, lưu ISO 8601 UTC và chỉ đổi múi giờ khi hiển thị. Không đổi uptime_s thành thời gian đo tuyệt đối nếu chưa có cơ chế đồng bộ phù hợp.
 
 Các quy ước để tích hợp tương thích:
 
@@ -92,12 +97,12 @@ Các quy ước để tích hợp tương thích:
 - Phía nhận có thể đánh dấu offline khi không có telemetry hợp lệ mới quá 20 giây; MQTT receiver nối được broker chưa chứng minh từng ESP online.
 - Chống trùng theo (device_id, boot_id, seq); bản trùng không làm mới received_at/online. Boot mới cho phép seq bắt đầu lại. Việc chọn bản mới nhất/theo dõi bản đến muộn do phía nhận triển khai.
 - Phía gửi nên chờ ACK 20 giây và có trạng thái pending/timeout, không tự lặp một lượt thử. Có thể tạo expires_uptime_s từ uptime mới nhất + tuổi mẫu + 20 giây, nhưng phải giữ trong cửa sổ còn hiệu lực tối đa 45 giây tại ESP.
-- Wi-Fi thử lại khoảng 15 giây, MQTT khoảng 10 giây, đăng ký lại topic sau khi nối. Packet timeout MQTT tại ESP hiện 100 ms; TCP connect có thể lâu hơn. Lượt thử đang hoạt động tránh mở lượt reconnect TCP mới.
+- Wi-Fi thử lại khoảng 15 giây, MQTT khoảng 10 giây, đăng ký lại topic sau khi nối. Packet timeout trong vòng phục vụ MQTT là 100 ms; chế độ cloud tạm dùng 2000 ms cho MQTT connect/subscribe rồi trả về 100 ms. DNS, TCP connect và TLS handshake đồng bộ là các bước riêng, có thể lâu hơn timeout packet và làm chậm vòng lấy mẫu. Lượt thử đầu ra đang hoạt động tránh mở lượt reconnect mới. Chưa có đo độ trễ/heap hoặc nghiệm thu từ chối chứng chỉ trên broker/ESP thật; xem [TEST_STATUS](TEST_STATUS.md).
 - Telemetry QoS 0 có thể mất mẫu; không có bộ đệm lưu bù lúc offline. QoS 1 có thể giao lặp lệnh nên giữ nguyên các chốt chống lặp/hết hạn.
 
 ## 6. Discovery broker tùy chọn
 
-Repo chỉ có **client discovery trên ESP**. Long cần triển khai responder theo hợp đồng dưới đây nếu muốn tự tìm IP; nếu không có header khóa thì firmware dùng MQTT_HOST dự phòng. Không có dịch vụ discovery/backend đi kèm bản bàn giao này.
+Repo chỉ có **client discovery trên ESP cho chế độ LAN `MQTT_USE_TLS=0`**. Long cần triển khai responder theo hợp đồng dưới đây nếu muốn tự tìm IP; nếu không có header khóa thì firmware dùng MQTT_HOST IPv4 dự phòng. `MQTT_USE_TLS=1` tắt toàn bộ signed LAN discovery và dùng hostname cloud đã cấu hình. Không có dịch vụ discovery/backend đi kèm bản bàn giao này.
 
 ESP bind UDP 41885, broadcast query đến UDP 41884 khoảng 3 giây/lần khi mất MQTT. Query JSON đúng ba trường: v=1, kind=fire-alarm-discover, nonce=32 hex thường. Giới hạn query tham chiếu 512 byte.
 
@@ -113,6 +118,6 @@ ESP yêu cầu nonce đang chờ, tuổi dưới 3000 ms, chỉ chấp nhận m�
 
 Responder nên chỉ quảng bá khi chính phía nhận đã nối/đăng ký MQTT thành công, có giới hạn tốc độ và kích thước. Long tạo và giữ cặp khóa riêng qua kênh riêng tư, dùng cùng khóa trên server và các ESP; không tạo khóa khác cho từng bo. Không đưa khóa thật vào Git, tài liệu hoặc ví dụ.
 
-Discovery không đổi Wi-Fi, không sửa config.h và không tự nạp chương trình. Mạng khách/hotspot cách ly, firewall hoặc VPN chọn sai tuyến có thể chặn UDP. Nếu không tìm được thì MQTT_HOST phải là IPv4 dự phòng đúng. MQTT hiện chưa TLS; HMAC discovery không mã hóa kết nối MQTT.
+Discovery không đổi Wi-Fi, không sửa config.h và không tự nạp chương trình. Mạng khách/hotspot cách ly, firewall hoặc VPN chọn sai tuyến có thể chặn UDP. Trong chế độ LAN, nếu không tìm được thì MQTT_HOST phải là IPv4 dự phòng đúng. HMAC discovery xác thực thông tin broker LAN, không mã hóa TCP MQTT trong chế độ đó; cloud TLS dùng đường kết nối riêng được mô tả ở mục 1 và [CLOUD_MQTT](CLOUD_MQTT.md).
 
 [Về README](../README.md) · [Bàn giao](HANDOVER.md) · [Kiểm tra](TEST_STATUS.md)

@@ -12,7 +12,7 @@ Sau khi tạo `firmware/node_full/config.h` từ file mẫu, có thể dùng Ard
 arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 --build-property "compiler.cpp.extra_flags=-DALARM_POLICY_SELF_TEST" firmware/node_full
 ```
 
-Lệnh trên chỉ biên dịch, không nạp hay tác động thiết bị. Nếu CLI không nằm trong PATH, dùng đường dẫn cài Arduino CLI của máy. Thư viện/core hiện tại xem [README](../README.md#board-và-thư-viện).
+Lệnh trên chỉ biên dịch, không nạp hay tác động thiết bị. Nếu CLI không nằm trong PATH, dùng đường dẫn cài Arduino CLI của máy. Thư viện/core hiện tại xem [README](../README.md#board-và-thư-viện). Mặc định là LAN; để build chế độ cloud, cấu hình `MQTT_USE_TLS=1`, hostname/cổng TLS và `mqtt_ca.h` theo [CLOUD_MQTT](../docs/CLOUD_MQTT.md). Cấu hình TLS thiếu CA vẫn biên dịch được nhưng không bật kết nối mạng cloud khi chạy.
 
 ## Ba sketch thử riêng
 
@@ -46,7 +46,8 @@ threshold record validation and persistence recovery. The filesystem/ESP stubs
 operate in memory. No backend source, MQTT broker, ESP or physical output is
 used by these checks.
 
-Run commands from the repository root. Required dependencies:
+Run commands from the repository root. The remote-threshold and remote-action
+suites require these dependencies:
 
 - A C++17 compiler such as GCC or Clang.
 - The ArduinoJson **6.21.5** source headers; set the include path to its `src`
@@ -58,6 +59,10 @@ Run commands from the repository root. Required dependencies:
 The hexadecimal HMAC key, request IDs and IP addresses in the test source are
 public test fixtures. They are not production discovery keys or connection
 credentials.
+
+`firmware_mqtt_cloud_policy.cpp` is a separate pure C++17 suite with 31
+hostname/time-readiness checks. It requires no ArduinoJson, OpenSSL, broker or
+ESP. It does not test DNS, a TLS handshake, certificates or network latency.
 
 ### Linux/macOS or a compatible shell
 
@@ -79,8 +84,13 @@ g++ -std=c++17 -Wall -Wextra -Werror -DALARM_POLICY_SELF_TEST \
   -I"$ARDUINOJSON_INCLUDE" tests/firmware_remote_actions.cpp \
   -lcrypto -o "$NATIVE_OUTPUT/firmware_remote_actions"
 
+g++ -std=c++17 -Wall -Wextra -Werror \
+  tests/firmware_mqtt_cloud_policy.cpp \
+  -o "$NATIVE_OUTPUT/firmware_mqtt_cloud_policy"
+
 "$NATIVE_OUTPUT/firmware_remote_thresholds"
 "$NATIVE_OUTPUT/firmware_remote_actions"
+"$NATIVE_OUTPUT/firmware_mqtt_cloud_policy"
 ```
 
 ### Windows PowerShell
@@ -97,9 +107,11 @@ New-Item -ItemType Directory -Force $nativeOutput | Out-Null
 
 g++ -std=c++17 -Wall -Wextra -Werror -DALARM_POLICY_SELF_TEST "-I$arduinoJsonInclude" -Itests/firmware_stubs tests/firmware_remote_thresholds.cpp -o "$nativeOutput/firmware_remote_thresholds.exe"
 g++ -std=c++17 -Wall -Wextra -Werror -DALARM_POLICY_SELF_TEST "-I$arduinoJsonInclude" tests/firmware_remote_actions.cpp -lcrypto -o "$nativeOutput/firmware_remote_actions.exe"
+g++ -std=c++17 -Wall -Wextra -Werror tests/firmware_mqtt_cloud_policy.cpp -o "$nativeOutput/firmware_mqtt_cloud_policy.exe"
 
 & "$nativeOutput/firmware_remote_thresholds.exe"
 & "$nativeOutput/firmware_remote_actions.exe"
+& "$nativeOutput/firmware_mqtt_cloud_policy.exe"
 ```
 
 Each executable prints a `PASS` line and exits successfully when its checks
@@ -109,6 +121,15 @@ that a physical buzzer, LED or sensor has operated correctly.
 
 For an ESP build, create a local `firmware/node_full/config.h` from
 `config.example.h`, configure your own connection values and retain the whole
-sketch folder. An absent `discovery_key.h` disables signed discovery and keeps
-the configured broker IP fallback available; do not add a production key to
-these tests or to Git.
+sketch folder. In default LAN mode, an absent `discovery_key.h` disables signed
+discovery and keeps the configured broker IPv4 fallback available. Cloud TLS
+mode uses the configured hostname and provider CA in a local `mqtt_ca.h`;
+signed LAN discovery is disabled. Do not add production keys or credentials
+to these tests or Git. See [CLOUD_MQTT](../docs/CLOUD_MQTT.md) for setup.
+
+Native passes and ESP compilation do not confirm that cloud service creation,
+flashing, certificate rejection or physical operation has been tested. The
+synchronous DNS/TCP/TLS connection can delay sampling; runtime latency, heap
+during reconnect and live certificate-failure behavior remain to be measured.
+Build variants and exact evidence limits are recorded in
+[TEST_STATUS](../docs/TEST_STATUS.md#bổ-sung-cloud-mqtt-tls--04112026).

@@ -4,11 +4,19 @@
 // Keep config.h, secrets.h and discovery_key.h out of Git.
 // node_full.ino includes Arduino.h before this header.
 
+// 0: existing LAN IPv4/TCP mode; 1: cloud hostname/TLS 1.2 mode.
+// TLS mode requires the provider CA in mqtt_ca.h and successful NTP time sync.
+// Copy mqtt_ca.example.h to mqtt_ca.h and paste the CA downloaded from the provider.
+// Signed LAN discovery is disabled in TLS mode; there is no plaintext fallback.
+#define MQTT_USE_TLS 0
+
 constexpr char WIFI_SSID[] = "CHANGE_ME";
 constexpr char WIFI_PASSWORD[] = "CHANGE_ME";
-// LAN IPv4 of the broker, used when signed discovery is unavailable.
+// LAN mode: IPv4 broker fallback. TLS mode: exact provider DNS hostname,
+// such as your-cluster.example.com, with no mqtts:// prefix, path or :port.
 // 127.0.0.1 refers to the ESP itself and must not be used here.
 constexpr char MQTT_HOST[] = "192.168.1.10";
+// Use the provider's TLS port (usually 8883) when MQTT_USE_TLS is 1.
 constexpr uint16_t MQTT_PORT = 1884;
 constexpr char MQTT_USERNAME[] = "iot_demo";
 constexpr char MQTT_PASSWORD[] = "CHANGE_ME";
