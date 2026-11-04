@@ -32,11 +32,19 @@
 - Chạy lại ba executable native: 76 kiểm tra ngưỡng/lưu trữ, 129 kiểm tra đầu ra/discovery và 31 kiểm tra hostname/thời gian cloud đều đạt (236 kiểm tra native). Các kiểm tra này không kết nối broker hoặc điều khiển thiết bị.
 - Bốn biến thể ESP8266/NodeMCU core 3.1.2 đã biên dịch đạt với `ALARM_POLICY_SELF_TEST`: LAN khai báo `MQTT_USE_TLS=0`; LAN cấu hình cũ thiếu macro; TLS có CA fixture công khai; TLS không có CA. Biến thể thiếu CA biên dịch được nhưng mã khởi tạo không bật kết nối cloud, không bỏ qua kiểm tra TLS.
 - Build TLS có cấu hình kiểm tra cuối cùng: RAM 34.812/80.192 byte; IRAM 61.783/65.536 byte; flash 415.012/1.048.576 byte. Số liệu thuộc đúng build đó, dùng giá trị kết nối giả và CA fixture công khai; không phải bằng chứng đã cấu hình/nối broker cloud thật. RAM tĩnh khi biên dịch không phải heap còn lại lúc handshake.
-- Chưa xác nhận broker cloud đã được tạo, chưa có hostname/CA/tài khoản broker thật để nghiệm thu, và chưa xác nhận source TLS đã được nạp lên ESP. Việc có tài khoản dịch vụ không đồng nghĩa broker đã sẵn sàng.
+- Trạng thái trên phản ánh thời điểm lập build record, trước lần tích hợp thật bên dưới; không còn là trạng thái mới nhất của broker/node02.
 - DNS, TCP connect và TLS handshake chạy đồng bộ, có thể làm chậm lấy mẫu. Chưa đo độ trễ vòng xử lý, heap khi handshake/reconnect, hoặc kiểm tra trên thiết bị thật với CA sai, tên chứng chỉ sai, chứng chỉ hết hạn và mạng/NTP không sẵn sàng. Các ca native về hostname/thời gian và build thiếu CA không thay thế các thử nghiệm TLS thực tế này.
-- Còn chờ kiểm tra telemetry/lệnh/ACK qua cloud, reconnect và hành vi cảnh báo tại chỗ trên từng node. Các mốc phần cứng LAN dưới đây là ghi nhận lịch sử riêng.
+- Telemetry node02 qua Cloud và backend đã được kiểm tra thủ công bên dưới. Vẫn cần nghiệm thu riêng reconnect, hai node, lệnh ngưỡng và đầu ra vật lý.
 
-## Ghi nhận thiết bị thật — khoảng 07:31, 04/11/2026, giờ Việt Nam
+## Kiểm tra thủ công end-to-end — 04/11/2026
+
+- ESP `node02` / phòng `102` kết nối EMQX Cloud qua TLS và publish telemetry schema 6. EMQX Clients hiển thị `node02` và `iot-full-backend` cùng kết nối; MQTT Client `emqx_cloud...` là client thử trong giao diện EMQX.
+- Backend FastAPI nhận topic `iot/devices/+/telemetry`. `/api/health` trả HTTP 200, `connected: true`, `rejected: 0`, và bộ đếm `accepted` tăng; `/api/devices` trả node02 online với telemetry mới.
+- Dữ liệu được lưu trong SQLite cục bộ; trang `/` trả HTTP 200. Đây là kiểm tra local, backend chỉ bind `127.0.0.1:8000`; chưa triển khai public và chưa kiểm tra MySQL.
+- Telemetry báo `buzzer_test.status=completed`; chưa có biên bản xác nhận âm thanh còi/LED thực tế. Payload còn `test: true`, API còn `prototype: true`.
+- `node01` chỉ có bản ghi cũ trong database và được đánh dấu offline. Chưa nghiệm thu node01 online cùng lúc với node02.
+
+## Ghi nhận thiết bị trước đó — khoảng 07:31, 04/11/2026, giờ Việt Nam
 
 - Đã quan sát telemetry mới của node02, phòng 102, được bên nhận tiếp tục nhận; tại mốc đó node02 hiển thị online.
 - node01 hiển thị offline trong cùng lần kiểm tra.

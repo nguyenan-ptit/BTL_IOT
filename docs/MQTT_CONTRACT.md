@@ -1,6 +1,6 @@
 # Hợp đồng MQTT của firmware
 
-Tài liệu này mô tả firmware ESP và dữ liệu mẫu; phần backend, database và HTTP API do nhóm tích hợp xây dựng. Long dùng tài liệu này để xây phía nhận/gửi tương thích. Tất cả [JSON mẫu](../examples/README.md) là MÔ PHỎNG, không phải dữ liệu thật hay lệnh đã gửi.
+Tài liệu này mô tả hợp đồng firmware ESP và dữ liệu mẫu. Repo kèm backend FastAPI prototype trong `backend/`: subscriber, validation schema 6, SQLite storage và API đã được kiểm tra với node02 trên EMQX Cloud. Long tiếp tục chuyển storage sang MySQL, tích hợp frontend và hoàn thiện triển khai; giữ topic/payload tương thích. Tất cả [JSON mẫu](../examples/README.md) là MÔ PHỎNG, không phải dữ liệu thật hay lệnh đã gửi.
 
 ## 1. Topic, định danh và kênh truyền
 
@@ -19,7 +19,7 @@ Firmware có hai chế độ cấu hình, dùng cùng topic và payload trong t�
 - Mặc định `MQTT_USE_TLS=0` (hoặc cấu hình cũ không khai báo macro): IPv4 và TCP MQTT trong LAN, cổng mẫu 1884; có thể dùng signed discovery bên dưới.
 - Cloud opt-in `MQTT_USE_TLS=1`: hostname DNS chính xác do nhà cung cấp cấp, cổng TLS của dịch vụ (thường 8883), TLS 1.2 với CA PEM trong `mqtt_ca.h` và thời gian SNTP để kiểm tra hạn chứng chỉ. `MQTT_HOST` không chứa `mqtts://`, đường dẫn, `:port` hoặc IP literal. Hostname được giữ cho DNS, SNI và kiểm tra tên chứng chỉ. Thiếu/sai CA hoặc hostname làm cấu hình mạng không được bật; đồng hồ chưa sẵn sàng thì chờ trước khi nối. Không có fallback sang TCP thường và không chạy signed LAN discovery trong chế độ này.
 
-Máy broker, thông tin truy cập và phân quyền publish/subscribe do Long/nhóm cấu hình. Hướng dẫn dịch vụ và cấu hình cloud nằm trong [CLOUD_MQTT](CLOUD_MQTT.md); hỗ trợ transport không chứng minh dịch vụ đã được triển khai hoặc đã nhận telemetry thật.
+Broker, thông tin truy cập và phân quyền publish/subscribe cấu hình riêng ngoài Git. Hướng dẫn firmware cloud nằm trong [CLOUD_MQTT](CLOUD_MQTT.md); cách cấu hình subscriber FastAPI nằm trong [backend README](../backend/README.md). Lần kiểm tra thủ công hiện tại nhận telemetry node02; xem [TEST_STATUS](TEST_STATUS.md).
 
 ## 2. Telemetry schema 6
 
@@ -89,20 +89,20 @@ Xem [đoạn ACK kết thúc](../examples/ack-output-test-completed-fragment.jso
 
 ## 5. Thời gian, vòng đời và khuyến nghị phía nhận
 
-Telemetry chưa có timestamp UTC cho thời điểm lấy mẫu. SNTP trong chế độ TLS phục vụ kiểm tra chứng chỉ, không bổ sung timestamp đo vào payload. Long cần tạo received_at bằng đồng hồ server lúc nhận, lưu ISO 8601 UTC và chỉ đổi múi giờ khi hiển thị. Không đổi uptime_s thành thời gian đo tuyệt đối nếu chưa có cơ chế đồng bộ phù hợp.
+Telemetry chưa có timestamp UTC cho thời điểm lấy mẫu. SNTP trong chế độ TLS phục vụ kiểm tra chứng chỉ, không bổ sung timestamp đo vào payload. Backend prototype đã tạo `received_at` bằng đồng hồ server lúc nhận và lưu ISO 8601 UTC; khi chuyển MySQL, giữ nguyên quy tắc này. Không đổi uptime_s thành thời gian đo tuyệt đối nếu chưa có cơ chế đồng bộ phù hợp.
 
 Các quy ước để tích hợp tương thích:
 
 - Telemetry khoảng 2 giây/lần hoặc khi đổi trạng thái, đồng thời làm heartbeat. Chưa có topic heartbeat hoặc MQTT LWT riêng.
-- Phía nhận có thể đánh dấu offline khi không có telemetry hợp lệ mới quá 20 giây; MQTT receiver nối được broker chưa chứng minh từng ESP online.
-- Chống trùng theo (device_id, boot_id, seq); bản trùng không làm mới received_at/online. Boot mới cho phép seq bắt đầu lại. Việc chọn bản mới nhất/theo dõi bản đến muộn do phía nhận triển khai.
+- Backend hiện đánh dấu offline khi không có telemetry hợp lệ mới trong 20 giây.
+- SQLite prototype đã chống trùng theo (device_id, boot_id, seq); bản trùng không làm mới received_at/online. Boot mới cho phép seq bắt đầu lại. Giữ hành vi này khi chuyển MySQL.
 - Phía gửi nên chờ ACK 20 giây và có trạng thái pending/timeout, không tự lặp một lượt thử. Có thể tạo expires_uptime_s từ uptime mới nhất + tuổi mẫu + 20 giây, nhưng phải giữ trong cửa sổ còn hiệu lực tối đa 45 giây tại ESP.
-- Wi-Fi thử lại khoảng 15 giây, MQTT khoảng 10 giây, đăng ký lại topic sau khi nối. Packet timeout trong vòng phục vụ MQTT là 100 ms; chế độ cloud tạm dùng 2000 ms cho MQTT connect/subscribe rồi trả về 100 ms. DNS, TCP connect và TLS handshake đồng bộ là các bước riêng, có thể lâu hơn timeout packet và làm chậm vòng lấy mẫu. Lượt thử đầu ra đang hoạt động tránh mở lượt reconnect mới. Chưa có đo độ trễ/heap hoặc nghiệm thu từ chối chứng chỉ trên broker/ESP thật; xem [TEST_STATUS](TEST_STATUS.md).
+- Wi-Fi thử lại khoảng 15 giây, MQTT khoảng 10 giây, đăng ký lại topic sau khi nối. Chế độ cloud dùng timeout 2000 ms cho MQTT connect/subscribe và 1000 ms sau khi kết nối để giảm lỗi đọc mạng `LWMQTT_NETWORK_TIMEOUT`; DNS, TCP connect và TLS handshake đồng bộ là các bước riêng, có thể lâu hơn timeout packet và làm chậm vòng lấy mẫu. Lượt thử đầu ra đang hoạt động tránh mở lượt reconnect mới. Chưa đo độ trễ/heap ở tải thật; xem [TEST_STATUS](TEST_STATUS.md).
 - Telemetry QoS 0 có thể mất mẫu; không có bộ đệm lưu bù lúc offline. QoS 1 có thể giao lặp lệnh nên giữ nguyên các chốt chống lặp/hết hạn.
 
 ## 6. Discovery broker tùy chọn
 
-Repo chỉ có **client discovery trên ESP cho chế độ LAN `MQTT_USE_TLS=0`**. Long cần triển khai responder theo hợp đồng dưới đây nếu muốn tự tìm IP; nếu không có header khóa thì firmware dùng MQTT_HOST IPv4 dự phòng. `MQTT_USE_TLS=1` tắt toàn bộ signed LAN discovery và dùng hostname cloud đã cấu hình. Không có dịch vụ discovery/backend đi kèm bản bàn giao này.
+Repo có client discovery trên ESP và responder tùy chọn trong `backend/discovery.py` cho chế độ LAN `MQTT_USE_TLS=0`. Cấu hình mẫu để discovery tắt; nếu bật cần tạo khóa cục bộ và đồng bộ với ESP. Nếu không có header khóa, firmware dùng MQTT_HOST IPv4 dự phòng. `MQTT_USE_TLS=1` tắt signed LAN discovery và dùng hostname cloud đã cấu hình.
 
 ESP bind UDP 41885, broadcast query đến UDP 41884 khoảng 3 giây/lần khi mất MQTT. Query JSON đúng ba trường: v=1, kind=fire-alarm-discover, nonce=32 hex thường. Giới hạn query tham chiếu 512 byte.
 

@@ -90,6 +90,7 @@ FlameMonitor flameMonitor;
 bool dsFound = false, dsConverting = false, dsValid = false;
 bool tempAlarm = false, gasAlarm = false, flameAlarm = false, buzzerCommand = false;
 bool mqSampled = false, mqCandidateAlarm = false, networkConfigured = false;
+bool lastMqttConnected = false;
 float temperatureC = 0;
 const char* dsHealth = "pending";
 const char* mqHealth = "warming_up";
@@ -146,12 +147,9 @@ const char* stateName() {
 void setBuzzer(bool enabled) {
   if (enabled == buzzerCommand) return;
   buzzerCommand = enabled;
-  if (enabled) {
-    analogWrite(BUZZER_PIN, 128);
-  } else {
-    analogWrite(BUZZER_PIN, BUZZER_IDLE_LEVEL == HIGH ? 255 : 0);
-    digitalWrite(BUZZER_PIN, BUZZER_IDLE_LEVEL);
-  }
+
+  digitalWrite(BUZZER_PIN,
+               enabled ? LOW : BUZZER_IDLE_LEVEL);
 }
 
 void applyOutputs(uint32_t now) {
@@ -401,6 +399,12 @@ void applyThresholdCommand() {
 
 void serviceNetwork(uint32_t now) {
   if (!networkConfigured) return;
+  const bool connectedAtEntry = mqtt.connected();
+  if (lastMqttConnected && !connectedAtEntry) {
+    Serial.printf("MQTT disconnected (error=%d, connack=%d).\n",
+                  static_cast<int>(mqtt.lastError()), static_cast<int>(mqtt.returnCode()));
+  }
+  lastMqttConnected = connectedAtEntry;
 #if !MQTT_USE_TLS
   if (brokerDiscovery.service(now, mqtt.connected(), brokerAddress, brokerPort)) {
     mqtt.setHost(brokerAddress, brokerPort);
@@ -439,7 +443,7 @@ void serviceNetwork(uint32_t now) {
     if (now - lastNetworkTry < NETWORK_RETRY_MS) return;
     lastNetworkTry = now;
 #if MQTT_USE_TLS
-    // Allow cloud CONNACK/SUBACK round trips, then restore the short loop timeout.
+    // Allow cloud CONNACK/SUBACK round trips before restoring the loop timeout.
     // This does not bound the separate synchronous DNS/TCP/TLS handshake.
     mqtt.setTimeout(2000);
 #endif
@@ -459,7 +463,9 @@ void serviceNetwork(uint32_t now) {
         (!thresholdStorage.ready || mqtt.subscribe(thresholdCommandTopic, 1)) &&
         mqtt.subscribe(buzzerTestTopic, 1);
 #if MQTT_USE_TLS
-    mqtt.setTimeout(100);
+    // TLS packets may arrive in fragments; 100 ms can turn a slow read into
+    // LWMQTT_NETWORK_TIMEOUT and force an otherwise healthy session closed.
+    mqtt.setTimeout(1000);
     lastNetworkTry = millis();
 #endif
     if (!subscriptionsReady) {
@@ -468,9 +474,17 @@ void serviceNetwork(uint32_t now) {
       return;
     }
     Serial.println("MQTT connected.");
+    lastMqttConnected = true;
     lastSend = now - SEND_INTERVAL_MS;
   }
-  mqtt.loop();
+  const bool loopOk = mqtt.loop();
+  const bool connectedAfterLoop = mqtt.connected();
+  if (!loopOk || !connectedAfterLoop) {
+    Serial.printf("MQTT loop status (ok=%u, connected=%u, error=%d, connack=%d).\n",
+                  loopOk ? 1 : 0, connectedAfterLoop ? 1 : 0,
+                  static_cast<int>(mqtt.lastError()), static_cast<int>(mqtt.returnCode()));
+  }
+  lastMqttConnected = connectedAfterLoop;
 }
 
 void setup() {
@@ -566,10 +580,16 @@ void loop() {
   const bool due = now - lastSend >= SEND_INTERVAL_MS || state != lastSentState;
   if (mqtt.connected() && due) {
     ++sequenceNumber;
-    if (makePayload() && mqtt.publish(telemetryTopic, payload, false, 0)) {
+    const bool payloadReady = makePayload();
+    const bool publishOk = payloadReady && mqtt.publish(telemetryTopic, payload, false, 0);
+    if (publishOk) {
       lastSend = now;
       lastSentState = state;
     } else {
+      Serial.printf("MQTT telemetry publish failed (payload=%u, connected=%u, error=%d, connack=%d).\n",
+                    payloadReady ? 1 : 0, mqtt.connected() ? 1 : 0,
+                    static_cast<int>(mqtt.lastError()), static_cast<int>(mqtt.returnCode()));
+      lastMqttConnected = mqtt.connected();
       lastSend = now; // Retry next period, never flood the local loop.
       lastSentState = state;
     }

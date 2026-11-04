@@ -1,0 +1,13 @@
+{
+  "database": "iot_data.db",
+  "mqtt_host": "127.0.0.1",
+  "mqtt_port": 1884,
+  "mqtt_tls": false,
+  "mqtt_ca_certs": "",
+  "mqtt_topic": "iot/devices/+/telemetry",
+  "mqtt_username": "",
+  "mqtt_password": "",
+  "discovery_enabled": false,
+  "discovery_key_path": "discovery.key",
+  "use_legacy_mqtt_credentials": false
+}
