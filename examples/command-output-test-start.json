@@ -1,0 +1,7 @@
+{
+  "request_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "boot_id": "0123456789abcdef",
+  "expected_seq": 0,
+  "expires_uptime_s": 620,
+  "action": "start"
+}

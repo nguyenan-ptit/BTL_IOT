@@ -1,0 +1,15 @@
+{
+  "remote_config": {
+    "version": 1,
+    "revision": 1,
+    "last_request_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "mq2": {
+    "adc_on": 80,
+    "adc_off": 70
+  },
+  "limits": {
+    "temperature_on_c": 65.5,
+    "temperature_off_c": 60.5
+  }
+}

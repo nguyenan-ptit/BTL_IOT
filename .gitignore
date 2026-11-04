@@ -1,0 +1,35 @@
+# Local connection credentials and keys
+firmware/node_full/config.h
+firmware/node_full/secrets.h
+firmware/node_full/discovery_key.h
+backend/settings.local.json
+backend/mqtt_passwords.local
+mosquitto-handover.local.conf
+*.key
+.env
+.env.*
+!.env.example
+
+# Environments, generated code and build products
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+test-output/
+build/
+*.bin
+*.elf
+*.map
+*.o
+*.exe
+*.bak
+
+# Local runtime data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+.DS_Store
+Thumbs.db
