@@ -1,5 +1,7 @@
 # Hợp đồng dữ liệu từ firmware P1 — V6
 
+> Bản lưu lịch sử ngày 26/10/2026. Hợp đồng hiện tại nằm ở [MQTT_CONTRACT.md](MQTT_CONTRACT.md), với topic riêng cho từng thiết bị, lệnh chỉnh ngưỡng và thử còi/đèn. Không dùng topic `iot/test` trong tài liệu cũ này để tích hợp firmware hiện tại.
+
 Tài liệu dành cho thành viên làm backend/frontend. Phần P1 gửi telemetry và tự điều khiển LED/còi tại ESP. Đây là prototype học tập; các ngưỡng hiện tại dùng để thử, không phải hệ thống báo cháy đã hiệu chuẩn.
 
 ## Tình trạng bàn giao

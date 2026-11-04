@@ -1,0 +1,12 @@
+{
+  "request_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "boot_id": "0123456789abcdef",
+  "expected_revision": 0,
+  "expires_uptime_s": 620,
+  "thresholds": {
+    "mq2_on": 80,
+    "mq2_off": 70,
+    "temperature_on_c": 65.5,
+    "temperature_off_c": 60.5
+  }
+}

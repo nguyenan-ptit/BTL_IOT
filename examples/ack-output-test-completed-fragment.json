@@ -1,0 +1,10 @@
+{
+  "buzzer_test": {
+    "version": 2,
+    "command_seq": 1,
+    "last_request_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "status": "completed",
+    "active": false,
+    "remaining_ms": 0
+  }
+}
