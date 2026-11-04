@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Giám sát cảm biến phòng trọ</title>
+  <style>
+    :root{color-scheme:light;--ink:#172d35;--muted:#53666e;--line:#dce4e7;--green:#176c43;--red:#b52735;--yellow:#8a5b05}
+    *{box-sizing:border-box}body{margin:0;background:#f3f6f7;color:var(--ink);font:16px/1.5 system-ui,sans-serif}
+    main{max-width:1120px;margin:auto;padding:40px 24px}h1{font-size:clamp(26px,4vw,38px);margin:0 0 4px;letter-spacing:-1px}
+    h2,h3,p{margin-top:0}.subtitle,.muted{color:var(--muted)}.prototype{display:inline-block;font-size:12px;letter-spacing:.08em;background:#dce9ed;border-radius:6px;padding:4px 8px;margin-bottom:12px}
+    .connection{background:white;border:1px solid var(--line);padding:14px 18px;border-radius:12px;margin:24px 0}
+    .connection.error{border-color:#b52735;background:#fff1f1;color:#8f1a28}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:20px}
+    article{background:white;border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 3px 12px #132b3206}
+    .top{display:flex;align-items:start;justify-content:space-between;gap:12px}.room{font-size:24px;margin-bottom:0}.device{font-size:13px;color:var(--muted)}
+    .badge{border-radius:99px;padding:6px 12px;font-size:13px;font-weight:700;white-space:nowrap}.normal .badge{background:#e1f4e9;color:var(--green)}
+    .alarm .badge{background:#ffe3e6;color:var(--red)}.fault .badge{background:#fff0c9;color:var(--yellow)}.offline .badge{background:#e9eef0;color:#4e616a}
+    .summary{font-weight:650;margin:18px 0}.alarm .summary{color:var(--red)}.fault .summary{color:var(--yellow)}
+    .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}.metric{background:#f5f8f9;padding:14px;border-radius:10px}.label{font-size:13px;color:var(--muted)}.value{font-size:28px;font-weight:650;line-height:1.4;overflow-wrap:anywhere}
+    .metric-fault{background:#fff4d5;box-shadow:inset 0 0 0 1px #e0bd69}.metric-fault .value,.metric-fault .label{color:var(--yellow)}
+    .sensors{list-style:none;padding:0;margin-bottom:16px}.sensors li{border-top:1px solid var(--line);padding:12px 0}.sensor-name{font-weight:700}.sensor-message{font-size:14px;color:var(--muted);margin-top:3px}.sensor-fault .sensor-message{color:var(--yellow)}
+    .sensor-fault .sensor-name::before{content:"";display:inline-block;width:9px;height:9px;margin-right:8px;border-radius:50%;background:#b88314}
+    .outputs,.seen{font-size:13px;color:var(--muted)}.seen{margin:8px 0 0}.offline .metrics{opacity:.55}.limitations{font-size:14px;color:var(--muted);margin-top:26px;border-left:3px solid #9bb2bc;padding-left:14px}
+    .empty{background:white;border:1px dashed #a8b9c1;padding:28px;border-radius:12px}.hidden{display:none}button{font:inherit;cursor:pointer;background:white;border:1px solid #acbcc4;border-radius:7px;padding:7px 12px}
+    .history{font-size:13px;max-height:240px;overflow:auto;margin-top:12px}.history p{margin-bottom:7px;border-top:1px solid var(--line);padding-top:7px}
+    .threshold-editor{border-top:1px solid var(--line);margin:18px 0;padding-top:14px}.threshold-editor summary{cursor:pointer;font-weight:650}.threshold-editor[open] summary{margin-bottom:12px}
+    .threshold-current,.threshold-help,.threshold-status{font-size:13px;margin:8px 0;color:var(--muted)}.threshold-current{color:var(--ink)}.threshold-fields{border:0;padding:0;margin:12px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .threshold-fields label{font-size:13px;display:flex;flex-direction:column;gap:4px}.threshold-fields input{font:inherit;color:var(--ink);width:100%;min-width:0;padding:9px;border:1px solid #acbcc4;border-radius:7px;background:white}
+    .threshold-save{font:inherit;padding:8px 13px;border:1px solid #176c43;border-radius:7px;background:#176c43;color:white;cursor:pointer}button:disabled,.threshold-save:disabled{opacity:.55;cursor:not-allowed}.threshold-fields:disabled input{background:#f3f6f7;color:var(--muted)}.threshold-status.error{color:var(--red)}.threshold-status.success{color:var(--green)}
+    .buzzer-control{border-top:1px solid var(--line);margin:18px 0;padding-top:14px}.buzzer-control h3{font-size:16px;margin-bottom:6px}.buzzer-help,.buzzer-status{font-size:13px;color:var(--muted);margin:8px 0}.buzzer-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.buzzer-start{background:#215d72;border-color:#215d72;color:white}.buzzer-status.error{color:var(--red)}.buzzer-status.running{color:#215d72}
+    input:focus-visible,summary:focus-visible,button:focus-visible{outline:3px solid #80aebb;outline-offset:2px}
+    @media(max-width:520px){main{padding:24px 14px}article{padding:18px}.top{flex-wrap:wrap}.metrics{grid-template-columns:1fr}.value{font-size:24px}}
+  </style>
+</head>
+<body><main>
+  <span class="prototype">MÔ HÌNH THỬ NGHIỆM</span>
+  <h1>Giám sát cảm biến phòng trọ</h1>
+  <p class="subtitle">Xem nhiệt độ, dấu hiệu cảnh báo và tình trạng từng cảm biến. Thời gian hiển thị theo giờ Việt Nam.</p>
+  <div id="connection" class="connection" role="status">Đang kết nối bộ nhận dữ liệu…</div>
+  <section id="cards" class="cards" aria-label="Thiết bị"></section>
+  <div id="empty" class="empty hidden">Chưa nhận được dữ liệu từ ESP. Thiết bị cần được nạp bản đầy đủ và kết nối cùng mạng với máy tính nhận dữ liệu.</div>
+  <p class="limitations">Xanh: dữ liệu đọc được, chưa có dấu hiệu cảnh báo. Đỏ nhấp nháy + còi: có cảnh báo. Vàng: có lỗi, chưa đủ dữ liệu hoặc đang chờ cảm biến.<br>
+  MQ‑2 dùng AO qua mạch chia áp vào A0. ADC là mức tín hiệu từ 0 đến 1023, không phải ppm; ADC = 0 không tự động có nghĩa cảm biến lỗi. Phép đọc analog không chẩn đoán đầy đủ lỗi dây, nguồn hoặc bộ nung.<br>
+  Flame hiển thị tình trạng kiểm tra ngay trong mục cảm biến lửa. Thông báo cần kiểm tra chưa xác định module bị hỏng; phép đọc không phát hiện đầy đủ mọi lỗi cảm biến, nguồn hoặc dây nối. Dữ liệu từ chương trình cũ cần được cập nhật để có đủ kiểm tra. Trạng thái còi/đèn trên trang là lệnh điều khiển của ESP, cần kiểm tra phần cứng thực tế.</p>
+</main>
+<script>
+  const cards=document.querySelector('#cards'), connection=document.querySelector('#connection'), empty=document.querySelector('#empty');
+  const stateText={normal:'Chưa có cảnh báo',alarm:'Có cảnh báo',fault:'Cần kiểm tra',offline:'Mất dữ liệu'};
+  const ledText={green:'Xanh liên tục',red_blink:'Đỏ nhấp nháy',yellow:'Vàng'};
+  const histories=new Map(),deviceCards=new Map(),editors=new Map(),buzzerControllers=new Map();
+  let apiFresh=false,mqttAvailable=false,lastRefreshAt=0;
+  const thresholdKeys=['mq2_on','mq2_off','temperature_on_c','temperature_off_c'];
+  function slot(root,name,value){root.querySelector('[data-slot="'+name+'"]').textContent=value}
+  function dateText(value){const d=new Date(value);return Number.isNaN(d.getTime())?'Không rõ thời gian':d.toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})}
+  function flameDoText(flame){return !flame?'—':flame.do_level===null?(flame.health==='disabled'?'Đang tắt':'—'):'DO = '+flame.do_level}
+  function flameStatusText(flame){
+    if(!flame)return 'Chưa có dữ liệu cảm biến lửa';
+    if(flame.alarm)return flame.health==='ok'?'Có tín hiệu cảnh báo':'Đang giữ cảnh báo trước đó';
+    if(flame.health==='ok')return 'Chưa có tín hiệu cảnh báo';
+    if(flame.health==='power_checking'||flame.health==='filtering')return 'Đang kiểm tra cảm biến lửa';
+    if(flame.health==='disabled')return 'Đã tắt trong cấu hình';
+    return 'Cần kiểm tra cảm biến lửa';
+  }
+  function flameSensorMessage(flame,version){
+    if(!flame)return 'Chưa có dữ liệu cảm biến lửa; cần cập nhật chương trình.';
+    if(flame.health==='power_checking'||flame.health==='filtering')return 'Đang kiểm tra cảm biến lửa.';
+    if(flame.health==='disabled')return 'Cảm biến lửa đã tắt trong cấu hình.';
+    if(flame.health!=='ok')return 'Không đọc được cảm biến lửa; kiểm tra nguồn và dây nối.';
+    return 'Đọc tín hiệu cảm biến lửa ổn định.'+(version<6?' Dữ liệu V'+version+'; cần cập nhật chương trình.':'');
+  }
+  function setMetricFault(root,name,fault){root.querySelector('[data-metric="'+name+'"]').classList.toggle('metric-fault',fault)}
+  function realAlarm(data){return data.system_state==='alarm'||data.temperature?.alarm===true||data.mq2?.alarm===true||data.flame?.alarm===true}
+  function manualTestLabel(data){return data.buzzer_test?.version===2?'còi và đèn':'còi (bản cũ)'}
+  function manualTestHistory(data){
+    const test=data.buzzer_test;if(!test||test.status==='idle')return '';
+    const status=realAlarm(data)&&test.active?'nhường cho cảnh báo thực tế':test.active?'đang chạy':{completed:'đã kết thúc',stopped:'đã dừng',blocked:'không thực hiện',interrupted:'đã dừng để ưu tiên cảnh báo thực tế'}[test.status];
+    return status?' · Thử '+manualTestLabel(data)+': '+status:'';
+  }
+  function outputText(item){
+    const data=item.data,prefix=(item.online?'Lệnh ESP: ':'Lệnh ở lần nhận trước: ')+ledText[data.led]+' · ';
+    if(realAlarm(data))return prefix+'Còi '+(data.buzzer_cmd?'BẬT':'TẮT')+' · Cảnh báo thực tế';
+    if(data.buzzer_test?.active===true)return prefix+'Đang thử '+manualTestLabel(data)+' · Còi '+(data.buzzer_cmd?'BẬT':'TẮT');
+    return prefix+'Còi '+(data.buzzer_cmd?'BẬT':'TẮT');
+  }
+  function buildBuzzerControl(root,item){
+    const panel=document.createElement('section');panel.className='buzzer-control';panel.setAttribute('aria-label','Thử còi và đèn');
+    panel.innerHTML='<h3>Kiểm tra còi và đèn</h3><p class="buzzer-help">Lượt thử bật còi và nháy đèn đỏ tối đa 3 giây, sau đó trở về trạng thái cảm biến. Dừng thử chỉ dừng lượt thử; cảnh báo thực tế luôn được ưu tiên.</p><div class="buzzer-actions"><button type="button" class="buzzer-start">Thử còi và đèn 3 giây</button><button type="button" class="buzzer-stop">Dừng thử</button></div><p class="buzzer-status" role="status" aria-live="polite"></p>';
+    root.insertBefore(panel,root.querySelector('.threshold-editor'));
+    const state={panel,item,sending:false,command:null,ignoredRequestId:null,runningRequestId:null,runningPolled:false,error:'',awaitRefresh:false};buzzerControllers.set(item.data.device_id,state);
+    panel.querySelector('.buzzer-start').addEventListener('click',()=>submitBuzzerTest(state,'start'));
+    panel.querySelector('.buzzer-stop').addEventListener('click',()=>submitBuzzerTest(state,'stop'));
+    return state;
+  }
+  function updateBuzzerControl(state,item){
+    state.item=item;
+    const incoming=item.buzzer_control?.pending,telemetry=item.data.buzzer_test;
+    if(incoming&&!state.sending&&incoming.request_id!==state.ignoredRequestId&&(!state.command||incoming.request_id===state.command.request_id||incoming.status==='pending')){
+      state.command=incoming;if(incoming.status==='pending')state.error='';
+    }
+    const command=state.command,matched=!!(command&&telemetry?.last_request_id===command.request_id);
+    if(matched&&!state.sending)state.error='';
+    const unmatchedRunning=command?.status==='running'&&!matched;
+    if(unmatchedRunning&&state.runningRequestId!==command.request_id){state.runningRequestId=command.request_id;state.runningPolled=false}
+    const staleRunning=unmatchedRunning&&state.runningPolled;
+    const observed=staleRunning?'superseded':matched?telemetry.status:command?.status||telemetry?.status||'idle';
+    const active=telemetry?.active===true,pending=!!(state.sending||(command?.status==='pending'&&!matched)||(unmatchedRunning&&!staleRunning)),alarm=realAlarm(item.data);
+    const supported=item.buzzer_control?.supported===true&&telemetry?.version===2&&Number.isInteger(telemetry.command_seq);
+    const available=supported&&item.online&&apiFresh&&mqttAvailable&&!state.awaitRefresh&&!state.sending;
+    state.panel.querySelector('.buzzer-start').disabled=!available||pending||active||alarm;
+    state.panel.querySelector('.buzzer-stop').disabled=!available||pending||!active;
+    let message='',kind='';
+    if(item.buzzer_control==null)message='Khởi động lại bộ nhận start_local.cmd rồi tải lại trang để dùng chức năng thử còi và đèn.';
+    else if(!supported)message='Cần nạp bản hỗ trợ thử còi và đèn.';
+    else if(alarm){message='Đang có cảnh báo thực tế. Dừng thử không tắt còi và đèn cảnh báo.';kind='error'}
+    else if(!apiFresh)message='Chưa kết nối được bộ nhận. Chờ dữ liệu mới trước khi thử còi và đèn.';
+    else if(state.error){message=state.error;kind='error'}
+    else if(pending)message=state.sending?'Đang gửi yêu cầu…':command?.action==='stop'?'Đã gửi lệnh dừng thử, đang chờ ESP xác nhận.':'Đã gửi lệnh thử còi và đèn, đang chờ ESP xác nhận.';
+    else if(!item.online)message='Thiết bị đang mất dữ liệu. Chưa thể thử hoặc dừng thử từ xa; lượt thử vẫn tự dừng sau tối đa 3 giây.';
+    else if(!mqttAvailable)message='Chưa kết nối MQTT. Chờ kết nối phục hồi trước khi gửi lệnh thử.';
+    else if(active){message='ESP đã nhận lệnh thử còi và đèn; hãy kiểm tra trực tiếp tại thiết bị. Lượt thử tự dừng sau tối đa 3 giây.';kind='running'}
+    else if(observed==='timeout'){message='Chưa nhận được xác nhận từ ESP. Không tự gửi lại lệnh thử.';kind='error'}
+    else if(observed==='superseded'){message='Thiết bị hoặc lượt thử đã thay đổi. Kiểm tra trạng thái rồi thử lại nếu cần.';kind='error'}
+    else if(observed==='blocked'){message='ESP không thực hiện lượt thử còi và đèn vì có cảnh báo thực tế.';kind='error'}
+    else if(observed==='interrupted')message='Lượt thử còi và đèn đã dừng để ưu tiên cảnh báo thực tế.';
+    else if((observed==='completed'&&matched)||(!command&&telemetry?.status==='completed'))message='ESP đã kết thúc lượt thử còi và đèn; đầu ra trở về trạng thái cảm biến. Hãy kiểm tra phần cứng thực tế.';
+    else if((observed==='stopped'&&matched)||(!command&&telemetry?.status==='stopped'))message='ESP đã dừng lượt thử còi và đèn; đầu ra trở về trạng thái cảm biến. Cảnh báo thực tế vẫn được ưu tiên.';
+    else if(observed==='running'||observed==='completed'||observed==='stopped')message='Đang chờ cập nhật trạng thái lượt thử từ ESP.';
+    else message='Sẵn sàng thử còi và đèn. Hãy kiểm tra trực tiếp tại thiết bị.';
+    const status=state.panel.querySelector('.buzzer-status');status.textContent=message;status.className='buzzer-status'+(kind?' '+kind:'');
+  }
+  async function submitBuzzerTest(state,action){
+    if(!['start','stop'].includes(action))return;
+    if(Date.now()-lastRefreshAt>6000){apiFresh=false;for(const editor of editors.values())updateEditor(editor,editor.item);for(const control of buzzerControllers.values())updateBuzzerControl(control,control.item);return}
+    if(state.panel.querySelector(action==='start'?'.buzzer-start':'.buzzer-stop').disabled||!apiFresh)return;
+    const item=state.item;
+    state.ignoredRequestId=state.command?.request_id||state.ignoredRequestId;state.sending=true;state.command=null;state.error='';updateBuzzerControl(state,item);
+    try{
+      const response=await fetch('/api/devices/'+encodeURIComponent(item.data.device_id)+'/buzzer-test',{method:'POST',headers:{'Content-Type':'application/json','X-IOT-Request':'1'},body:JSON.stringify({expected_boot_id:item.data.boot_id,expected_seq:item.data.buzzer_test.command_seq,action}),signal:AbortSignal.timeout(6000)});
+      const result=await response.json().catch(()=>null);
+      if(!response.ok){
+        const fallback=response.status===409?'Thiết bị hoặc lượt thử đã thay đổi. Chờ cập nhật trạng thái rồi thử lại.':response.status===422?'Lệnh thử còi và đèn chưa hợp lệ. Tải lại trang rồi thử lại.':response.status===404?'Khởi động lại bộ nhận sau khi cập nhật để dùng chức năng thử còi và đèn.':'Chưa gửi được lệnh thử còi và đèn. Kiểm tra kết nối rồi thử lại.';
+        throw new Error(typeof result?.detail==='string'?result.detail:fallback);
+      }
+      if(!result||!['pending','running','completed','stopped','blocked','interrupted','timeout','superseded'].includes(result.status)||typeof result.request_id!=='string'||!['start','stop'].includes(result.action))throw new Error('Chưa xác nhận được phản hồi. Chờ cập nhật trạng thái ESP trước khi gửi lại.');
+      state.command=result;
+    }catch(error){state.error=error.name==='TimeoutError'||error.name==='TypeError'?'Chưa nhận được phản hồi. Chờ cập nhật trạng thái ESP trước khi gửi lại.':error.message;state.awaitRefresh=true}
+    finally{state.sending=false;updateBuzzerControl(state,state.item)}
+  }
+  function actualThresholds(data){return {mq2_on:data.mq2.adc_on,mq2_off:data.mq2.adc_off,temperature_on_c:data.limits?.temperature_on_c,temperature_off_c:data.limits?.temperature_off_c}}
+  function sameThresholds(a,b){return !!a&&!!b&&thresholdKeys.every(key=>Number.isFinite(a[key])&&Number.isFinite(b[key])&&Math.abs(a[key]-b[key])<0.001)}
+  function thresholdText(values){const show=value=>Number.isFinite(value)?value:'—';return 'MQ‑2: bật ≥ '+show(values.mq2_on)+', tắt ≤ '+show(values.mq2_off)+' ADC · Nhiệt độ: bật ≥ '+show(values.temperature_on_c)+', tắt ≤ '+show(values.temperature_off_c)+' °C'}
+  function buildEditor(root,item){
+    const panel=document.createElement('details');panel.className='threshold-editor';
+    panel.innerHTML='<summary>Điều chỉnh ngưỡng</summary><p class="threshold-current"></p><p class="threshold-help">Ngưỡng tắt phải thấp hơn ngưỡng bật. MQ‑2 dùng số ADC từ 0 đến 1023, không phải ppm.</p><form class="threshold-form"><fieldset class="threshold-fields"><label>MQ‑2 · bật cảnh báo (ADC)<input name="mq2_on" type="number" min="1" max="1023" step="1" required></label><label>MQ‑2 · tắt cảnh báo (ADC)<input name="mq2_off" type="number" min="0" max="1022" step="1" required></label><label>Nhiệt độ · bật cảnh báo (°C)<input name="temperature_on_c" type="number" min="-55" max="125" step="0.1" required></label><label>Nhiệt độ · tắt cảnh báo (°C)<input name="temperature_off_c" type="number" min="-55" max="125" step="0.1" required></label></fieldset><input class="threshold-save" type="submit" value="Gửi ngưỡng đến ESP"><p class="threshold-status" role="status" aria-live="polite"></p></form>';
+    root.insertBefore(panel,root.querySelector('.history-toggle'));
+    const form=panel.querySelector('form'),state={panel,form,item,dirty:false,sending:false,command:null,ownRequestId:null,dismissedRequestId:null,error:'',awaitRefresh:false,rebaseAfterRefresh:false,baseBoot:null,baseRevision:null};
+    editors.set(item.data.device_id,state);
+    form.addEventListener('input',()=>{
+      if(!state.dirty){state.baseBoot=state.item.data.boot_id;state.baseRevision=state.item.data.remote_config?.revision}
+      if(state.command&&state.command.status!=='pending'){state.dismissedRequestId=state.command.request_id;state.command=null}
+      state.dirty=true;state.error='';updateEditor(state,state.item);
+    });
+    form.addEventListener('submit',event=>{event.preventDefault();submitThresholds(state)});
+    return state;
+  }
+  function updateEditor(state,item){
+    state.item=item;
+    const incoming=item.remote_control?.pending;
+    if(incoming&&!state.sending&&incoming.request_id!==state.dismissedRequestId&&(!state.command||incoming.request_id===state.command.request_id||incoming.status==='pending')){
+      state.command=incoming;if(incoming.status==='pending')state.error='';
+    }
+    const current=actualThresholds(item.data),command=state.command;
+    const confirmed=command?.status==='applied'&&sameThresholds(current,command.thresholds);
+    const outdatedApplied=command?.status==='applied'&&!confirmed;
+    if(confirmed&&!state.sending&&state.ownRequestId===command.request_id){state.dirty=false;state.error=''}
+    const waiting=!!(state.sending||command?.status==='pending');
+    const supported=item.remote_control?.supported===true;
+    if(!state.dirty&&!waiting){
+      for(const key of thresholdKeys)state.form.elements.namedItem(key).value=Number.isFinite(current[key])?current[key]:'';
+      state.baseBoot=item.data.boot_id;state.baseRevision=item.data.remote_config?.revision;
+    }
+    state.panel.querySelector('.threshold-current').textContent=(item.online?'ESP đang dùng: ':'Ngưỡng ở lần nhận trước: ')+thresholdText(current);
+    state.form.querySelector('fieldset').disabled=!supported||waiting;
+    state.form.querySelector('.threshold-save').disabled=!supported||!item.online||!apiFresh||!mqttAvailable||waiting||state.awaitRefresh;
+    let message='',kind='';
+    if(item.remote_control==null)message='Bộ nhận đang chạy bản cũ. Khởi động lại start_local.cmd rồi tải lại trang.';
+    else if(!supported)message='Cần nạp firmware hỗ trợ chỉnh ngưỡng từ xa.';
+    else if(!apiFresh)message='Chưa kết nối được bộ nhận. Chờ dữ liệu mới trước khi gửi ngưỡng.';
+    else if(state.error){message=state.error;kind='error'}
+    else if(waiting)message=(state.sending?'Đang gửi yêu cầu…':'Đã gửi yêu cầu, đang chờ ESP xác nhận. Ngưỡng đang dùng vẫn hiển thị ở trên.')+(!item.online?' Thiết bị đang mất dữ liệu.':'');
+    else if(!item.online)message='Thiết bị đang mất dữ liệu. Chưa thể gửi ngưỡng.';
+    else if(!mqttAvailable)message='Chưa kết nối MQTT. Chờ kết nối phục hồi trước khi gửi ngưỡng.';
+    else if(command?.status==='timeout'){message='Chưa nhận được xác nhận từ ESP. Kiểm tra ngưỡng đang dùng trước khi gửi lại.';kind='error'}
+    else if(command?.status==='superseded'||outdatedApplied){message='Thiết bị hoặc ngưỡng đã thay đổi. Kiểm tra ngưỡng đang dùng rồi gửi lại nếu cần.';kind='error'}
+    else if(confirmed&&!state.dirty){message='ESP đã xác nhận ngưỡng đang dùng.';kind='success'}
+    else message=state.dirty?'Có thay đổi chưa gửi.':'Nhập ngưỡng mới rồi gửi đến thiết bị.';
+    const status=state.form.querySelector('.threshold-status');status.textContent=message;status.className='threshold-status'+(kind?' '+kind:'');
+  }
+  async function submitThresholds(state){
+    const item=state.item,form=state.form;
+    if(Date.now()-lastRefreshAt>6000){apiFresh=false;for(const editor of editors.values())updateEditor(editor,editor.item);for(const control of buzzerControllers.values())updateBuzzerControl(control,control.item);return}
+    if(form.querySelector('.threshold-save').disabled||!apiFresh)return;
+    if(!form.reportValidity())return;
+    const thresholds=Object.fromEntries(thresholdKeys.map(key=>[key,form.elements.namedItem(key).valueAsNumber]));
+    if(!Number.isInteger(thresholds.mq2_on)||!Number.isInteger(thresholds.mq2_off)||thresholds.mq2_off>=thresholds.mq2_on||thresholds.temperature_off_c>=thresholds.temperature_on_c){
+      state.error='Ngưỡng tắt phải thấp hơn ngưỡng bật; ngưỡng MQ‑2 phải là số nguyên.';updateEditor(state,item);return;
+    }
+    state.dismissedRequestId=state.command?.request_id||state.dismissedRequestId;state.sending=true;state.error='';state.command=null;updateEditor(state,item);
+    try{
+      const response=await fetch('/api/devices/'+encodeURIComponent(item.data.device_id)+'/thresholds',{method:'POST',headers:{'Content-Type':'application/json','X-IOT-Request':'1'},body:JSON.stringify({expected_boot_id:state.baseBoot,expected_revision:state.baseRevision,thresholds}),signal:AbortSignal.timeout(6000)});
+      const result=await response.json().catch(()=>null);
+      if(!response.ok){
+        if(response.status===409)state.rebaseAfterRefresh=true;
+        const fallback=response.status===409?'Thiết bị hoặc ngưỡng đã thay đổi. Kiểm tra ngưỡng đang dùng rồi gửi lại.':response.status===422?'Ngưỡng không hợp lệ. Kiểm tra các giá trị và ngưỡng bật/tắt.':response.status===404?'Bộ nhận chưa hỗ trợ chỉnh ngưỡng. Khởi động lại bộ nhận sau khi cập nhật.':'Chưa gửi được ngưỡng. Kiểm tra kết nối rồi thử lại.';
+        throw new Error(typeof result?.detail==='string'?result.detail:fallback);
+      }
+      if(!result||!['pending','applied','timeout','superseded'].includes(result.status)||typeof result.request_id!=='string')throw new Error('Phản hồi chưa hợp lệ. Kiểm tra ngưỡng đang dùng trước khi gửi lại.');
+      state.command=result;state.ownRequestId=result.request_id;
+    }catch(error){state.error=error.name==='TimeoutError'||error.name==='TypeError'?'Chưa nhận được phản hồi. Chờ cập nhật trạng thái ESP trước khi gửi lại.':error.message;state.awaitRefresh=true}
+    finally{state.sending=false;updateEditor(state,state.item)}
+  }
+  function card(item){
+    const data=item.data, root=deviceCards.get(data.device_id)||document.createElement('article');root.className=item.display_state;
+    if(!deviceCards.has(data.device_id)){
+      root.innerHTML='<div class="top"><div><h2 class="room" data-slot="room"></h2><div class="device" data-slot="device"></div></div><span class="badge" data-slot="status"></span></div><p class="summary" data-slot="summary"></p><div class="metrics"><div class="metric" data-metric="temperature"><div class="label">DS18B20 · nhiệt độ</div><div class="value" data-slot="temperature"></div></div><div class="metric" data-metric="gas"><div class="label">MQ‑2 · tín hiệu khí/khói</div><div class="value" data-slot="gas"></div><div class="label" data-slot="gas-status"></div><div class="label" data-slot="gas-thresholds"></div></div><div class="metric" data-metric="flame"><div class="label">Flame · cảm biến lửa</div><div class="value" data-slot="flame"></div><div class="label" data-slot="flame-status"></div></div></div><ul class="sensors"></ul><div class="outputs" data-slot="outputs"></div><p class="seen" data-slot="seen"></p><button class="history-toggle" type="button">Xem lịch sử</button><div class="history hidden"></div>';
+      deviceCards.set(data.device_id,root);buildEditor(root,item);
+    }
+    if(!buzzerControllers.has(data.device_id))buildBuzzerControl(root,item);
+    slot(root,'room','Phòng '+data.room);slot(root,'device',data.device_id);slot(root,'status',stateText[item.display_state]);
+    const hazards=item.sensors.filter(s=>s.alarm).map(s=>s.sensor);
+    const pending=item.configuration_pending?(data.schema_version<5?'Chưa chuyển MQ-2 sang AO; cần cập nhật chương trình và kiểm tra kết nối cảm biến.':'Cần cập nhật chương trình để kiểm tra đầy đủ cảm biến lửa.'):'';
+    const summary=!item.online?'Thiết bị chưa gửi dữ liệu mới trong 20 giây. Các thông tin bên dưới thuộc lần nhận trước.':item.display_state==='alarm'?'Cảnh báo từ '+hazards.join(' và ')+(pending?' · '+pending:''):pending|| (item.display_state==='fault'?'Xem tình trạng cảm biến bên dưới.':'Dữ liệu đọc được; chưa phát hiện dấu hiệu cảnh báo.');
+    slot(root,'summary',(item.online&&data.buzzer_test?.active===true&&!realAlarm(data)?'Đang thử '+manualTestLabel(data)+'. ':'')+summary);
+    slot(root,'temperature',data.temperature.value_c===null?'—':data.temperature.value_c.toFixed(1)+' °C');
+    const analog=data.schema_version>=5;
+    const gasText=analog?(data.mq2.adc_raw===null?'Đang tắt':'ADC = '+data.mq2.adc_raw):data.mq2.health==='ok'?(data.mq2.alarm?'Vượt ngưỡng':'Chưa vượt ngưỡng'):data.mq2.do_level===null?'Đang tắt':'DO = '+data.mq2.do_level;
+    slot(root,'gas',gasText);
+    slot(root,'gas-status',data.mq2.alarm?(data.mq2.health==='ok'?'Có cảnh báo':'Đang giữ cảnh báo trước đó'):data.mq2.health==='warming_up'?'Đang chờ làm nóng':data.mq2.health==='filtering'?'Đang chờ tín hiệu ổn định':data.mq2.health==='disabled'?'Đã tắt trong cấu hình':data.mq2.health==='ok'?'Chưa có cảnh báo':'Chưa đọc tín hiệu');
+    slot(root,'gas-thresholds',analog?'Thang ADC 0–1023 · Bật ≥ '+data.mq2.adc_on+' · Tắt ≤ '+data.mq2.adc_off:'Bản cũ đang dùng DO; cần V6 để nhận AO');
+    const flame=data.schema_version>=3?data.flame:null;
+    slot(root,'flame',flameDoText(flame));
+    slot(root,'flame-status',flameStatusText(flame));
+    setMetricFault(root,'temperature',data.temperature.health!=='ok');
+    setMetricFault(root,'gas',data.mq2.health!=='ok');
+    setMetricFault(root,'flame',!flame||flame.health!=='ok');
+    root.querySelector('.sensors').replaceChildren();
+    for(const sensor of item.sensors){
+      const li=document.createElement('li');if(sensor.health!=='ok')li.className='sensor-fault';
+      const name=document.createElement('div');name.className='sensor-name';name.textContent=sensor.sensor;
+      const reading=sensor.sensor==='MQ-2'?data.mq2:sensor.sensor==='Flame'?flame:null;
+      const text=document.createElement('div');text.className='sensor-message';text.textContent=(sensor.sensor==='Flame'?flameSensorMessage(flame,data.schema_version):sensor.message)+(sensor.sensor==='MQ-2'&&sensor.health==='warming_up'?' · còn '+data.mq2.warmup_remaining_s+' giây':'')+(reading&&reading.do_level!==null?' · DO = '+reading.do_level:'')+(sensor.sensor==='MQ-2'&&analog&&reading.adc_raw!==null?' · ADC = '+reading.adc_raw:'')+(sensor.alarm_held?' · Đang giữ cảnh báo trước đó; cần số đo hợp lệ để xóa.':'');
+      li.append(name,text);root.querySelector('.sensors').append(li);
+    }
+    slot(root,'outputs',outputText(item));
+    slot(root,'seen','Nhận gần nhất: '+dateText(item.received_at));
+    updateEditor(editors.get(data.device_id),item);
+    updateBuzzerControl(buzzerControllers.get(data.device_id),item);
+    const historyBox=root.querySelector('.history'),button=root.querySelector('.history-toggle');
+    if(histories.has(data.device_id)){historyBox.classList.remove('hidden');renderHistory(historyBox,histories.get(data.device_id));button.textContent='Ẩn lịch sử'}
+    button.onclick=async()=>{
+      if(histories.has(data.device_id)){histories.delete(data.device_id);historyBox.classList.add('hidden');button.textContent='Xem lịch sử';return}
+      button.disabled=true;
+      try{const response=await fetch('/api/history?device_id='+encodeURIComponent(data.device_id)+'&limit=10',{cache:'no-store',signal:AbortSignal.timeout(4000)});if(!response.ok)throw new Error();const result=await response.json();histories.set(data.device_id,result.items);renderHistory(historyBox,result.items);historyBox.classList.remove('hidden');button.textContent='Ẩn lịch sử'}
+      catch{historyBox.textContent='Chưa đọc được lịch sử. Thử lại sau.';historyBox.classList.remove('hidden')}
+      finally{button.disabled=false}
+    };
+    return root;
+  }
+  function renderHistory(box,items){box.replaceChildren();for(const item of items){const p=document.createElement('p'),data=item.data,flame=data.schema_version>=3?data.flame:null;const flameText=flameDoText(flame)+' · '+flameStatusText(flame);const mq=data.schema_version>=5?(data.mq2.adc_raw===null?'đang tắt':'ADC = '+data.mq2.adc_raw)+' · bật ≥ '+data.mq2.adc_on+' / tắt ≤ '+data.mq2.adc_off:(data.mq2.do_level===null?'chưa đọc DO':'DO = '+data.mq2.do_level);p.textContent=dateText(item.received_at)+' · V'+data.schema_version+' · '+stateText[data.system_state]+manualTestHistory(data)+' · DS18B20: '+(data.temperature.value_c===null?'không có số đo':data.temperature.value_c.toFixed(1)+' °C')+' · MQ-2: '+mq+(data.mq2.alarm?' · '+(data.mq2.health==='ok'?'cảnh báo':'đang giữ cảnh báo'):'')+' · Flame: '+flameText;box.append(p)}}
+  async function refresh(){
+    try{
+      const response=await fetch('/api/devices',{cache:'no-store',signal:AbortSignal.timeout(4000)});if(!response.ok)throw new Error();const result=await response.json();
+      const ok=result.mqtt.connected&&!result.mqtt.last_error;apiFresh=true;mqttAvailable=ok;lastRefreshAt=Date.now();connection.className='connection'+(ok?'':' error');
+      connection.textContent=ok?'Bộ nhận đang kết nối · cập nhật lúc '+new Date().toLocaleTimeString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):(result.mqtt.last_error||'Chưa kết nối bộ nhận MQTT. Kiểm tra Mosquitto và cấu hình trên máy tính.');
+      for(const item of result.items){const state=editors.get(item.data.device_id);if(state){state.awaitRefresh=false;if(state.rebaseAfterRefresh){state.baseBoot=item.data.boot_id;state.baseRevision=item.data.remote_config?.revision;state.rebaseAfterRefresh=false}}const buzzer=buzzerControllers.get(item.data.device_id);if(buzzer){buzzer.awaitRefresh=false;if(buzzer.runningRequestId)buzzer.runningPolled=true}}
+      const roots=result.items.map(card),keep=new Set(roots);
+      for(const old of [...cards.children])if(!keep.has(old))old.remove();
+      roots.forEach((root,index)=>{if(cards.children[index]!==root)cards.insertBefore(root,cards.children[index]||null)});
+      empty.classList.toggle('hidden',result.items.length>0);
+    }catch{apiFresh=false;mqttAvailable=false;for(const state of editors.values())updateEditor(state,state.item);for(const state of buzzerControllers.values())updateBuzzerControl(state,state.item);connection.className='connection error';connection.textContent='Mất kết nối với chương trình trên máy tính. Không có dữ liệu trực tiếp để xác nhận trạng thái.';cards.replaceChildren();empty.classList.add('hidden')}
+    setTimeout(refresh,2000);
+  }
+  setInterval(()=>{if(apiFresh&&Date.now()-lastRefreshAt>6000){apiFresh=false;for(const state of editors.values())updateEditor(state,state.item);for(const state of buzzerControllers.values())updateBuzzerControl(state,state.item)}},1000);
+  refresh();
+</script></body></html>
