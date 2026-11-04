@@ -1,61 +1,101 @@
-# Bàn giao P1 — phần cứng và firmware hai node
+# BTL_IOT — dự án giám sát và cảnh báo cháy/gas
 
-Ngày chuẩn bị: 26/10/2026. Phạm vi P1: lắp phần cứng, lập trình cảm biến và đèn/còi cho hai node. Gói này chứa phần bàn giao P1 để ghép vào repository nhóm; không phải toàn bộ ứng dụng đã hoàn thành.
+Repository nhóm gồm phần cứng/firmware ESP8266 cho hai node và frontend giám sát. Các thư mục `backend/`, `database/`, `deployment/` hiện chỉ có tệp giữ chỗ; thành viên phụ trách cần tiếp tục triển khai và tích hợp. Ghép mã nguồn không xác nhận hệ thống đã chạy liên thông hoặc đã nghiệm thu trên hai board.
 
-## Nội dung cần đẩy lên repository nhóm
+Phần bàn giao **Nguyễn Văn An: phần cứng/firmware ESP8266, cảm biến, LED và còi cho hai node** gồm firmware, cấu hình mẫu, hợp đồng MQTT, JSON mô phỏng và kiểm tra firmware. Hà Hải Long triển khai MQTT receiver, database, HTTP API và quản lý vòng đời thiết bị dựa trên hợp đồng đó.
 
-| Thư mục | Nội dung bàn giao |
-|---|---|
-| `firmware/node_full/` | Firmware V6 và cấu hình mẫu, không có mật khẩu thật |
+## Nội dung và điểm bàn giao
+
+| Thư mục | Nội dung |
+| --- | --- |
+| `firmware/node_full/` | Firmware V6 hiện tại, cấu hình mẫu và ngưỡng/thử đầu ra/discovery |
+| `tests/firmware/usb_stability_test/`, `tests/firmware/ds18b20_test/`, `tests/firmware/mq2_test/` | Sketch thử riêng giữ lại từ gói P1 |
 | `hardware/` | Bảng chân, sơ đồ dây, danh sách linh kiện và nơi bổ sung ảnh prototype thật |
-| `tests/` | Ba sketch thử riêng, hướng dẫn kiểm thử firmware và kịch bản kiểm tra cả hai node |
-| `docs/` | Quy ước MQTT/schema6, JSON mô phỏng cho backend/frontend và tiến độ còn chờ |
-
-Chép nội dung các thư mục vào đúng vị trí trong repository nhóm. Gộp quy tắc `.gitignore` vào file hiện có. Nếu repository đã có README chung, gộp phần P1 cần thiết hoặc đặt tài liệu này trong `docs/p1/`; không ghi đè README của nhóm. Không chỉ đẩy file ZIP: cần commit các mã nguồn và tài liệu đã giải nén.
-
-`backend/`, `frontend/`, `database/`, `deployment/`, README tổng thể và `.env.example` chung cần phối hợp với thành viên phụ trách. Gói P1 không tạo những thư mục rỗng để coi là đã hoàn thành các phần đó. Firmware hiện đọc cấu hình C++ từ `config.h`, không tự đọc `.env`.
-
-## Kiến trúc và điểm bàn giao
+| `docs/` | Bàn giao, hợp đồng MQTT hiện tại, tình trạng kiểm tra và tài liệu P1 lịch sử |
+| `examples/` | Telemetry/lệnh/ACK mô phỏng theo hợp đồng MQTT hiện tại |
+| `tests/` | Kiểm tra native C++, hướng dẫn biên dịch và kịch bản kiểm tra phần cứng |
+| `frontend/` | Website giám sát; mặc định dùng dữ liệu giả lập |
 
 ```text
 DS18B20 / MQ-2 / Flame → ESP8266 → đèn/còi tại chỗ
-                              └→ Wi-Fi → MQTT → backend → database / web / Telegram
+                              ↕ Wi-Fi / MQTT
+                            backend → database / web / Telegram
 ```
 
-Firmware đã có đọc cảm biến, quyết định trạng thái, điều khiển đèn/còi tại chỗ và gửi telemetry. Xem `docs/telemetry-contract.md` để bên backend nhận dữ liệu, bên frontend hiển thị và các thành viên khác thiết kế cảnh báo từ xa. Firmware này chưa có nhận lệnh MQTT, ACK lệnh hay cấu hình ngưỡng từ web; phần điều khiển từ xa cần thống nhất giao thức và phát triển tiếp.
+Đường backend/database/web trong sơ đồ là điểm tích hợp của nhóm. Firmware có đọc cảm biến, điều khiển đèn/còi, telemetry, nhận lệnh ngưỡng và thử đầu ra có ACK. Frontend giả lập chưa chứng minh các đường tích hợp này đã hoạt động.
 
-## Chuẩn bị và biên dịch
+Tài liệu `docs/telemetry-contract.md` và `docs/progress.md` giữ lại mốc P1 ngày 26/10/2026. Khi tích hợp firmware hiện tại, dùng [MQTT_CONTRACT](docs/MQTT_CONTRACT.md), [JSON mẫu mới](examples/README.md) và [TEST_STATUS](docs/TEST_STATUS.md).
 
-1. Đọc `hardware/wiring.md` trước khi đấu dây. Ngắt mọi nguồn khi thay dây; nhánh D1 mới chỉ dành cho nguồn Flame 3V3.
-2. Arduino IDE chọn **NodeMCU 1.0 (ESP-12E Module)**; cấu hình đã kiểm tra là ESP8266 core **3.1.2**, thư viện **MQTT 2.5.3 của Joel Gaehwiler/256dpi**, **OneWire** và **DallasTemperature 4.0.5**.
-3. Sao chép `firmware/node_full/config.example.h` thành `config.h` cùng thư mục; điền Wi-Fi 2,4 GHz, địa chỉ broker và tài khoản cục bộ. IP `192.0.2.10` trong mẫu chỉ minh họa, phải thay bằng địa chỉ broker thật. Không commit `config.h`.
-4. Đặt ID riêng cho hai node. Đề xuất khi nhóm thống nhất: `node01`/phòng `101`, `node02`/phòng `102`. Đây là quy hoạch đề xuất, chưa xác nhận đã áp dụng trên hai board. Bản thử V5 trước đây từng dùng `node02`/phòng `101`; cần báo cho backend nếu đổi ánh xạ.
-5. Mở `node_full.ino` và Verify. Marker V6 là `NODE_FULL_V6_FLAME_POWER`. Xem `tests/README.md` để bật 31 kiểm tra tại thời điểm biên dịch.
-6. Chỉ nạp/kiểm tra mạch sau khi dây, nguồn và đường USB đã sẵn sàng. Serial Monitor **115200 baud**; thông tin trạng thái khoảng 2 giây/lần. Không tự chọn COM cũ khi board đã đổi cổng.
+## Bắt đầu
 
-Nếu compiler ESP8266 báo lỗi Unicode do đường dẫn tiếng Việt, đặt bản làm việc ở đường dẫn ASCII, ví dụ `C:\iot_p1\`. Thay đường dẫn không sửa được lỗi nguồn hoặc USB quá dòng.
+1. Đọc [bàn giao cho Long](docs/HANDOVER.md), [sơ đồ dây](hardware/wiring.md), [sơ đồ chân hiện tại](docs/PINOUT.md) và [hợp đồng MQTT](docs/MQTT_CONTRACT.md). Ngắt mọi nguồn khi thay dây; nhánh D1 dành cho giám sát nguồn Flame 3V3.
+2. Giữ toàn bộ thư mục `firmware/node_full` khi biên dịch. Tạo cấu hình riêng từ mẫu:
 
-## Tình trạng bàn giao trung thực
+   ```powershell
+   Copy-Item .\firmware\node_full\config.example.h .\firmware\node_full\config.h
+   ```
 
-- **V6:** đã có code và đã biên dịch với kiểm tra chính sách/nguồn, nhưng chưa xác nhận được nạp lên ESP hay nối xong nhánh D1 tại thời điểm chuẩn bị gói.
-- **Hai node:** là phạm vi cần hoàn thành và kiểm thử; chưa có bằng chứng cả hai node đã chạy đầy đủ.
-- **V5:** từng nhận số đo thật từ một node qua USB/MQTT; kết quả lịch sử đó không phải kiểm chứng V6 hoặc node thứ hai.
-- Ngưỡng MQ 60/55 là ADC thử, không phải ppm. Còi nghỉ HIGH cần đối chiếu module thật. Nguồn MQ tại VV và khả năng Flame hoạt động đúng ở 3V3 chưa được đo/xác nhận đầy đủ. Chi tiết và việc cần làm nằm trong `docs/progress.md`.
+3. Điền Wi-Fi 2,4 GHz, IPv4 của máy chạy broker, cổng và tài khoản MQTT do Long cấp. `127.0.0.1` trên ESP là chính ESP, không phải máy tính.
+4. Với bo phòng 101 dùng `DEVICE_ID="node01"`, `ROOM_ID="101"`; với bo phòng 102 dùng `node02`/`102`. ID phải riêng cho mỗi ESP; phòng đặt theo vị trí thật. Bản V5 trước đây từng dùng `node02`/phòng `101`; cần thống nhất ánh xạ với backend khi đổi và phân biệt dữ liệu lịch sử.
+5. Nạp đúng bo/cổng COM bằng Arduino IDE. Serial 115200 của source hiện tại có marker `NODE_FULL_V6_DEVICE_TOPICS`. Ghi lại marker/ID trên từng bo; việc source biên dịch đạt không chứng minh nó đã được nạp.
+
+Firmware đọc `config.h`, không tự đọc `.env`. `config.h` là cấu hình riêng, đã được bỏ qua trong Git. Mẫu trong repo không chứa mật khẩu hoạt động. `MQTT_HOST` hiện nhận IPv4; firmware này dùng MQTT TCP trong LAN, chưa hỗ trợ hostname/TLS cho broker cloud.
+
+## Board và thư viện
+
+| Thành phần | Phiên bản đã dùng để kiểm tra |
+| --- | --- |
+| Board | NodeMCU 1.0 (ESP-12E Module), ESP8266 core 3.1.2 |
+| MQTT | MQTT 2.5.3 của Joel Gaehwiler / 256dpi |
+| ArduinoJson | 6.21.5 |
+| DallasTemperature | 4.0.6 |
+| OneWire | 2.3.8 |
+
+Giữ phân vùng LittleFS khi dùng Upload sketch thông thường để không xóa ngưỡng đã lưu. Các ngưỡng trong `config.h` là mặc định khi chưa có bản lưu hợp lệ; ngưỡng thực tế cần đọc từ telemetry.
+
+## Giao tiếp với phần Long
+
+| Topic | Chiều | QoS |
+| --- | --- | --- |
+| `iot/devices/<id>/telemetry` | ESP → bên nhận | 0 |
+| `iot/devices/<id>/config/set` | Bên điều khiển → ESP | 1 |
+| `iot/devices/<id>/buzzer/test` | Bên điều khiển → ESP | 1 |
+
+Các publish không retained. Telemetry schema 6 gửi khoảng 2 giây/lần và khi trạng thái đổi; nó chứa dữ liệu, heartbeat và xác nhận lệnh. `buzzer_test.version=2` hỗ trợ thử chung còi và LED đỏ khoảng 3 giây. Các [JSON mẫu](examples/README.md) là mô phỏng, không phải dữ liệu thật hay lệnh đã gửi.
+
+## Discovery tùy chọn
+
+Không có `discovery_key.h` thì firmware vẫn biên dịch và dùng `MQTT_HOST` dự phòng. Để dùng tự tìm broker, Long cần triển khai responder UDP/HMAC theo [hợp đồng](docs/MQTT_CONTRACT.md) và thống nhất cùng khóa với ESP. Khóa thật được trao đổi riêng, không commit vào Git. Đổi khóa hoặc Wi-Fi trong source cần nạp lại ESP tương ứng.
+
+Discovery chỉ áp dụng cho LAN/subnet và dải IP riêng mà firmware cho phép; không thay thế kết nối broker cloud. Nếu chưa triển khai responder, dùng IPv4 broker cố định được truy cập từ ESP.
+
+## Kiểm tra và nghiệm thu
+
+- [Hướng dẫn chạy kiểm tra firmware](tests/README.md).
+- [Kết quả phần mềm và tình trạng nghiệm thu từng node](docs/TEST_STATUS.md).
+
+Cảm biến và cảnh báo tại ESP tiếp tục được xử lý nếu mất mạng nhưng còn nguồn. MQ-2 chờ phần mềm 300 giây sau mỗi lần ESP khởi động; ADC thô không phải ppm và không chẩn đoán được mọi lỗi dây/nguồn.
+
+Không đưa `config.h`, khóa discovery, mật khẩu, database, log vận hành hoặc binary/build đã nhúng cấu hình riêng vào repo. Phần bàn giao firmware không cung cấp backend/database hoặc tài khoản vận hành; frontend có trong repository nhóm và cần được ghép API thật theo hướng dẫn riêng.
+
+## Phần cứng và nghiệm thu từng node
+
+Thực hiện [kịch bản kiểm tra phần cứng](tests/hardware-test-cases.md) cho từng board. Các sketch thử riêng và bằng chứng P1 cũ vẫn được giữ trong [tests/README](tests/README.md). Số đo hoặc trạng thái online của một node không xác nhận cả hai node đã chạy đầy đủ; ACK/biên dịch đạt không thay quan sát còi, LED, dây, nguồn và ngưỡng lưu trên từng board.
+
+Còi nghỉ HIGH, nguồn MQ tại VV và Flame 3V3 cần đối chiếu module/mạch thật theo tài liệu phần cứng. Nếu compiler ESP8266 báo lỗi Unicode do đường dẫn tiếng Việt, dùng đường dẫn ASCII, ví dụ `C:\iot_p1\`; thay đường dẫn không sửa được lỗi nguồn hoặc USB quá dòng.
 
 ## Cách ghép việc trong nhóm
 
 | Thành viên tiếp nhận | Cần đọc / cần thống nhất |
-|---|---|
-| Backend | `docs/telemetry-contract.md`, các mẫu JSON; broker/topic/tài khoản, ánh xạ ID/phòng, kiểm tra dữ liệu, lưu lịch sử và xử lý cảnh báo |
-| Frontend | Trạng thái `normal/fault/alarm`, health từng cảm biến, đơn vị °C và ADC, thời gian nhận cuối; dữ liệu giả phải ghi rõ mô phỏng |
-| Triển khai / bot | Cấu hình broker và truy cập; thông báo có chống gửi lặp; bot là phần nâng cao, không thay web quản lý |
-| P1 | Hoàn thiện dây và kiểm tra V6 trên hai node; bổ sung ảnh thật, kết quả và log đã loại thông tin cá nhân |
+| --- | --- |
+| Backend | Hợp đồng MQTT hiện tại, JSON mẫu; broker/topic/tài khoản, ánh xạ ID/phòng, kiểm tra dữ liệu/ACK, lưu lịch sử và cảnh báo |
+| Frontend | Trạng thái `normal/fault/alarm`, health từng cảm biến, °C/ADC, thời gian nhận cuối; hợp đồng HTTP API và dữ liệu giả có ghi mô phỏng |
+| Triển khai / bot | Cấu hình broker và truy cập, thông báo chống gửi lặp; bot là phần nâng cao, không thay web quản lý |
+| P1 | Hoàn thiện dây và nghiệm thu từng node; bổ sung ảnh thật, kết quả và log đã loại thông tin cá nhân |
 
-Mỗi người commit bằng tài khoản GitHub của mình, mô tả đúng thay đổi thật. Không tạo lịch sử commit giả. Nhóm tạo tag/release cuối khi tích hợp và nghiệm thu; gói bàn giao này chưa phải khẳng định đạt v1.0.0.
+Mỗi người commit bằng tài khoản GitHub của mình, mô tả đúng thay đổi thật. Không tạo lịch sử commit giả. Nhóm tạo tag/release cuối sau khi tích hợp và nghiệm thu; bản bàn giao chưa phải xác nhận đạt v1.0.0.
 
-## Thông tin không đưa lên GitHub
-
-Không commit `config.h`, `.env` thật, token bot, file mật khẩu broker, database thật, log chứa dữ liệu cá nhân, `.venv`, cache hay `.bak`. `.gitignore` chỉ giúp bỏ qua file chưa được theo dõi; vẫn kiểm tra danh sách file trước khi commit. Không đưa mật khẩu/token vào nội dung commit hoặc ảnh chụp.
+Không commit `.env` thật, token bot, mật khẩu broker, log chứa dữ liệu cá nhân, `.venv`, cache hay `.bak`. `.gitignore` chỉ giúp bỏ qua file chưa được theo dõi; kiểm tra danh sách file trước khi commit. Không đưa mật khẩu/token vào nội dung commit hoặc ảnh chụp.
 
 ## Chạy frontend
 
