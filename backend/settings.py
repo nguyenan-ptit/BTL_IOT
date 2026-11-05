@@ -68,6 +68,29 @@ def load_settings():
         raise ValueError("Đường dẫn khóa tìm MQTT không hợp lệ")
     discovery_key = Path(discovery_key)
     config["discovery_key_path"] = discovery_key if discovery_key.is_absolute() else HERE / discovery_key
-    db = Path(config["database"])
-    config["database"] = db if db.is_absolute() else path.parent / db
+    config["mysql"] = _load_mysql(config.get("mysql"))
     return config
+
+
+def _load_mysql(block):
+    """Validate the `mysql` block. Environment variables override the file so the
+    password can stay out of settings files (IOT_MYSQL_PASSWORD)."""
+    if not isinstance(block, dict):
+        raise ValueError("Thiếu khối mysql trong cấu hình")
+    mysql = dict(block)
+    for key in ("host", "user", "password", "database"):
+        mysql[key] = os.environ.get("IOT_MYSQL_" + key.upper(), mysql.get(key, ""))
+    env_port = os.environ.get("IOT_MYSQL_PORT")
+    if env_port is not None:
+        try:
+            mysql["port"] = int(env_port)
+        except ValueError:
+            raise ValueError("IOT_MYSQL_PORT phải là số nguyên") from None
+    for key in ("host", "user", "database"):
+        if not isinstance(mysql[key], str) or not mysql[key].strip():
+            raise ValueError(f"mysql.{key} không hợp lệ")
+    if not isinstance(mysql["password"], str) or not mysql["password"]:
+        raise ValueError("Thiếu mật khẩu MySQL; đặt mysql.password trong settings.local.json hoặc biến IOT_MYSQL_PASSWORD")
+    if type(mysql.get("port")) is not int or not 1 <= mysql["port"] <= 65535:
+        raise ValueError("mysql.port không hợp lệ")
+    return {k: mysql[k] for k in ("host", "port", "user", "password", "database")}

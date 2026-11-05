@@ -1,18 +1,18 @@
 import logging
 import re
-import sqlite3
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import paho.mqtt.client as mqtt
+import pymysql
 from fastapi import FastAPI, HTTPException, Query, Request, Path as ApiPath
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
 from settings import load_settings
-from storage import initialize, save, read_latest, history
+from storage import configure as configure_storage, initialize, save, read_latest, history
 from validation import validate_message
 from remote_control import RemoteController, ThresholdUpdate
 from buzzer_control import BuzzerController, BuzzerTestUpdate
@@ -71,14 +71,15 @@ class Receiver:
             data = validate_message(message.payload)
             if data["device_id"] != topic.group(1):
                 raise ValueError("Mã thiết bị trong telemetry không khớp topic")
-            inserted = save(self.config["database"], data)
+            inserted = save(data)
         except (ValueError, UnicodeDecodeError, TypeError, OverflowError, RecursionError):
             with self.lock:
                 self.status["rejected"] += 1
             return  # Never log a raw untrusted payload or credentials.
-        except sqlite3.Error:
-            self.update(last_error="Không ghi được database; kiểm tra quyền ghi hoặc ổ đĩa")
-            logger.error("Database write failed")
+        except pymysql.MySQLError as exc:
+            self.update(last_error="Không ghi được MySQL; kiểm tra kết nối, tài khoản và quyền ghi")
+            # Chỉ log loại lỗi/mã lỗi, không log payload hay thông tin đăng nhập.
+            logger.error("MySQL write failed: %s (%s)", type(exc).__name__, exc.args[0] if exc.args else "?")
             return
         if inserted:
             with self.lock:
@@ -97,7 +98,8 @@ class Receiver:
 @asynccontextmanager
 async def lifespan(app):
     config = load_settings()
-    initialize(config["database"])
+    configure_storage(config["mysql"])
+    initialize()
     app.state.config = config
     app.state.receiver = Receiver(config)
     app.state.remote_control = RemoteController(app.state.receiver.client)
@@ -136,8 +138,8 @@ def health():
 @app.get("/api/devices")
 def devices():
     try:
-        items = read_latest(app.state.config["database"])
-    except sqlite3.Error:
+        items = read_latest()
+    except pymysql.MySQLError:
         raise HTTPException(503, "Chưa đọc được dữ liệu cảm biến") from None
     for item in items:
         item["remote_control"] = app.state.remote_control.snapshot(item)
@@ -171,9 +173,9 @@ def update_thresholds(request: Request, body: ThresholdUpdate,
                       device_id: str = ApiPath(pattern=r"^[A-Za-z0-9_-]{1,32}$")):
     check_control_request(request)
     try:
-        item = next((item for item in read_latest(app.state.config["database"])
+        item = next((item for item in read_latest()
                      if item["data"]["device_id"] == device_id), None)
-    except sqlite3.Error:
+    except pymysql.MySQLError:
         raise HTTPException(503, "Chưa đọc được dữ liệu cảm biến.") from None
     if item is None:
         raise HTTPException(404, "Chưa có dữ liệu của ESP này.")
@@ -185,9 +187,9 @@ def test_buzzer(request: Request, body: BuzzerTestUpdate,
                 device_id: str = ApiPath(pattern=r"^[A-Za-z0-9_-]{1,32}$")):
     check_control_request(request)
     try:
-        item = next((item for item in read_latest(app.state.config["database"])
+        item = next((item for item in read_latest()
                      if item["data"]["device_id"] == device_id), None)
-    except sqlite3.Error:
+    except pymysql.MySQLError:
         raise HTTPException(503, "Chưa đọc được dữ liệu cảm biến.") from None
     if item is None:
         raise HTTPException(404, "Chưa có dữ liệu của ESP này.")
@@ -198,7 +200,9 @@ def test_buzzer(request: Request, body: BuzzerTestUpdate,
 def device_history(device_id: str = Query(pattern=r"^[A-Za-z0-9_-]{1,32}$"),
                    limit: int = Query(default=20, ge=1, le=100)):
     try:
-        items = history(app.state.config["database"], device_id, limit)
-    except sqlite3.Error:
+        items = history(device_id, limit)
+    except pymysql.MySQLError:
         raise HTTPException(503, "Chưa đọc được lịch sử") from None
     return {"items": items}
+
+

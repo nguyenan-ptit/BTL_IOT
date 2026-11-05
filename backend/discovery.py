@@ -16,7 +16,6 @@ NONCE = re.compile(r"[0-9a-f]{32}\Z")
 PRIVATE_NETWORKS = tuple(ipaddress.ip_network(value) for value in
                          ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
 
-
 def _unique_object(pairs):
     result = {}
     for key, value in pairs:
