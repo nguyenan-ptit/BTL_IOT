@@ -1,36 +1,23 @@
 import json
-import os
 import pymysql
 from datetime import datetime, timezone
 from validation import sensor_details
 
-
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "settings.local.json")
+# Cấu hình kết nối MySQL 
+MYSQL_CONFIG = {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "123456", 
+    "database": "iot_db",
+    "cursorclass": pymysql.cursors.DictCursor
+}
 
 def get_db_connection():
-    
-    mysql_config = {
-        "host": "localhost",
-        "port": 3306,
-        "user": "root",
-        "password": "", 
-        "database": "iot_db",
-        "cursorclass": pymysql.cursors.DictCursor
-    }
-    
-   
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if "mysql" in data:
-                    mysql_config.update(data["mysql"])
-        except Exception as e:
-            print(f"Lỗi đọc file cấu hình MySQL: {e}")
-            
-    return pymysql.connect(**mysql_config)
+    return pymysql.connect(**MYSQL_CONFIG)
 
 def initialize(path=None):
+    """Khởi tạo bảng history trong MySQL nếu chưa tồn tại"""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -56,6 +43,7 @@ def initialize(path=None):
         conn.close()
 
 def save(path, data, received_at=None):
+    """Lưu bản tin telemetry vào bảng history của MySQL (hỗ trợ trích xuất linh hoạt chống giá trị NULL)"""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -67,9 +55,24 @@ def save(path, data, received_at=None):
             seq = data.get("seq", 0)
             sys_state = data.get("system_state", "normal")
             
-            temp = data.get("temperature", {}).get("value_c")
-            mq2 = data.get("mq2", {}).get("adc_raw")
-            flame = 1 if data.get("flame", {}).get("alarm") else 0
+            # Xử lý trích xuất linh hoạt (hỗ trợ cả dạng dict lồng nhau lẫn dạng giá trị thô)
+            temp_obj = data.get("temperature")
+            if isinstance(temp_obj, dict):
+                temp = temp_obj.get("value_c")
+            else:
+                temp = temp_obj
+                
+            mq2_obj = data.get("mq2")
+            if isinstance(mq2_obj, dict):
+                mq2 = mq2_obj.get("adc_raw")
+            else:
+                mq2 = data.get("mq2_adc", mq2_obj)
+                
+            flame_obj = data.get("flame")
+            if isinstance(flame_obj, dict):
+                flame = 1 if flame_obj.get("alarm") else 0
+            else:
+                flame = 1 if flame_obj else 0
             
             sql = """
                 INSERT INTO history (
@@ -91,6 +94,7 @@ def save(path, data, received_at=None):
         conn.close()
 
 def read_latest(path=None, now=None):
+    """Lấy bản tin mới nhất của từng thiết bị để hiển thị lên giao diện"""
     now = now or datetime.now(timezone.utc)
     conn = get_db_connection()
     try:
@@ -111,7 +115,6 @@ def read_latest(path=None, now=None):
         for row in rows:
             data = json.loads(row["raw_payload"])
             try:
-                # Đổi timestamp sang dạng age tính giây
                 rec_time = row["timestamp"]
                 if isinstance(rec_time, str):
                     rec_dt = datetime.fromisoformat(rec_time)
@@ -141,6 +144,7 @@ def read_latest(path=None, now=None):
         conn.close()
 
 def history(path, device_id, limit=20):
+    """Lấy danh sách lịch sử telemetry của một thiết bị cụ thể"""
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
