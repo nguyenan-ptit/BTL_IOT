@@ -1,6 +1,6 @@
 # Kết nối MQTT cloud
 
-Firmware có hai chế độ: LAN IPv4/TCP mặc định và cloud qua hostname/TLS 1.2 khi bật `MQTT_USE_TLS`. Repo hiện cũng có backend FastAPI prototype đã nhận telemetry từ EMQX Cloud và lưu SQLite; xem [backend README](../backend/README.md). Long tiếp tục chuyển storage sang MySQL và hoàn thiện deployment.
+Firmware có hai chế độ: LAN IPv4/TCP và cloud qua hostname/TLS 1.2 khi bật `MQTT_USE_TLS`. Backend FastAPI hiện dùng MySQL và đã nhận telemetry thật từ EMQX Cloud trong buổi test local; xem [backend README](../backend/README.md). Tự động cấp/thu hồi tài khoản MQTT cần API quản trị broker riêng và chưa hoạt động trên cấu hình Serverless hiện tại; xem [LONG_API](LONG_API.md). Việc nhận được telemetry không chứng minh BE đã quản lý được tài khoản broker.
 
 ## 1. Tạo broker EMQX Serverless
 

@@ -1,6 +1,6 @@
 # Hợp đồng MQTT của firmware
 
-Tài liệu này mô tả hợp đồng firmware ESP và dữ liệu mẫu. Repo kèm backend FastAPI prototype trong `backend/`: subscriber, validation schema 6, SQLite storage và API đã được kiểm tra với node02 trên EMQX Cloud. Long tiếp tục chuyển storage sang MySQL, tích hợp frontend và hoàn thiện triển khai; giữ topic/payload tương thích. Tất cả [JSON mẫu](../examples/README.md) là MÔ PHỎNG, không phải dữ liệu thật hay lệnh đã gửi.
+Tài liệu này mô tả hợp đồng firmware ESP và dữ liệu mẫu. Backend FastAPI trong `backend/` hiện gồm subscriber, validation schema 6, MySQL storage và API có xác thực. Telemetry thật từ node01/node02 qua EMQX Cloud đã được quan sát trong buổi test local; tích hợp đăng nhập/frontend, quản trị tài khoản broker tự động và deployment vẫn còn việc cần hoàn tất. Xem [bàn giao hiện tại](HANDOVER.md) và [trạng thái kiểm thử](LONG_IMPLEMENTATION_STATUS.md). Tất cả [JSON mẫu](../examples/README.md) là MÔ PHỎNG, không phải dữ liệu thật hay lệnh đã gửi.
 
 ## 1. Topic, định danh và kênh truyền
 

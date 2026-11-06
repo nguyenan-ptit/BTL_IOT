@@ -370,6 +370,124 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertTrue(storage.save(self.sample()))
 
+    def _assert_backend_pause_resume(self, paused):
+        self.db.device()
+        self.db.device("node02")
+        self.db.connection.execute("UPDATE devices SET mqtt_sync_status='unknown' WHERE device_id='node01'")
+        self.db.connection.commit()
+        self.assertTrue(storage.save(self.sample()))
+        self.admin.users["u_node01"] = "existing-account"
+        self.admin.sessions["u_node01"] = ["existing-client"]
+        broker_before = copy.deepcopy((self.admin.users, self.admin.rules, self.admin.sessions))
+        url = "/api/devices/node01/lifecycle"
+        response = self.client.patch(url, headers=self.headers(OWNER), json={"lifecycle_status": paused})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["credential_status"], "active")
+        self.assertEqual(response.json()["mqtt_sync_status"], "unknown")
+        with self.assertRaises(storage.DeviceNotAllowed):
+            storage.save(self.sample(seq=2))
+        self.assertTrue(storage.save(self.sample("node02")))
+        before = self.db.row("SELECT * FROM devices WHERE device_id='node01'")
+        self.assertEqual(before["lifecycle_status"], paused)
+        # A note edit must not lose the durable pause, even across a new API client.
+        response = self.client.patch(url, headers=self.headers(OWNER), json={"maintenance_note": "checked"})
+        self.assertEqual(response.status_code, 200, response.text)
+        restarted_client = TestClient(application.app)
+        try:
+            response = restarted_client.patch(url, headers=self.headers(OWNER), json={"lifecycle_status": "active"})
+        finally:
+            restarted_client.close()
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["lifecycle_status"], "active")
+        self.assertTrue(storage.save(self.sample(seq=2)))
+        device = self.db.row("SELECT * FROM devices WHERE device_id='node01'")
+        for key in ("mqtt_username", "mqtt_client_id", "credential_status", "mqtt_sync_status", "mqtt_operation_id"):
+            self.assertEqual(device[key], before[key], key)
+        self.assertEqual(self.db.row("SELECT COUNT(*) AS n FROM history WHERE device_id='node01'")["n"], 2)
+        self.assertEqual((self.admin.users, self.admin.rules, self.admin.sessions), broker_before)
+        self.assertEqual(self.db.row("SELECT COUNT(*) AS n FROM mqtt_operations")["n"], 0)
+
+    def test_lifecycle_block_resume_with_unknown_broker_sync(self):
+        self._assert_backend_pause_resume("blocked")
+
+    def test_lifecycle_maintenance_resume_with_unknown_broker_sync(self):
+        self._assert_backend_pause_resume("maintenance")
+
+    def test_lifecycle_resume_from_maintenance_then_blocked(self):
+        self.db.device()
+        self.db.connection.execute("UPDATE devices SET mqtt_sync_status='unknown'")
+        self.db.connection.commit()
+        for status in ("maintenance", "blocked", "active"):
+            response = self.client.patch("/api/devices/node01/lifecycle", headers=self.headers(),
+                                         json={"lifecycle_status": status})
+            self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(storage.save(self.sample()))
+
+    def test_lifecycle_unknown_sync_cannot_bypass_first_activation(self):
+        self.db.device(lifecycle="provisioned")
+        self.db.connection.execute("UPDATE devices SET mqtt_sync_status='unknown'")
+        self.db.connection.commit()
+        for status in ("active", "blocked", "active"):
+            response = self.client.patch("/api/devices/node01/lifecycle", headers=self.headers(),
+                                         json={"lifecycle_status": status})
+            self.assertEqual(response.status_code, 200 if status == "blocked" else 409, response.text)
+        self.assertEqual(self.db.row("SELECT lifecycle_status FROM devices")["lifecycle_status"], "blocked")
+
+    def test_lifecycle_resume_checks_credentials_identity_and_operation(self):
+        self.db.device()
+        self.db.connection.execute("UPDATE devices SET mqtt_sync_status='unknown'")
+        self.db.connection.commit()
+        url = "/api/devices/node01/lifecycle"
+        self.assertEqual(self.client.patch(url, headers=self.headers(), json={"lifecycle_status": "blocked"}).status_code, 200)
+        for field, value in (("credential_status", "pending"), ("credential_status", "revoked"),
+                             ("mqtt_username", "changed-account"), ("mqtt_operation_id", "a" * 32),
+                             ("mqtt_sync_status", "pending"), ("mqtt_sync_status", "failed")):
+            with self.subTest(field=field, value=value):
+                old = self.db.row("SELECT * FROM devices")[field]
+                self.db.connection.execute("UPDATE devices SET " + field + "=?", (value,))
+                self.db.connection.commit()
+                response = self.client.patch(url, headers=self.headers(), json={"lifecycle_status": "active"})
+                self.assertEqual(response.status_code, 409, response.text)
+                self.db.connection.execute("UPDATE devices SET " + field + "=?", (old,))
+                self.db.connection.commit()
+
+    def test_lifecycle_pause_resume_enforces_permissions(self):
+        self.db.device()
+        self.db.connection.execute("UPDATE devices SET mqtt_sync_status='unknown'")
+        self.db.connection.commit()
+        url = "/api/devices/node01/lifecycle"
+        for headers, expected in (({}, 401), (self.headers(TENANT), 403),
+                                  (self.headers({"user_id": 1004, "role": "owner"}), 403)):
+            response = self.client.patch(url, headers=headers, json={"lifecycle_status": "blocked"})
+            self.assertEqual(response.status_code, expected, response.text)
+        self.assertEqual(self.db.row("SELECT lifecycle_status FROM devices")["lifecycle_status"], "active")
+
+    def test_lifecycle_revoked_node_cannot_use_backend_resume(self):
+        self.db.device()
+        with patch.object(self.admin, "check", side_effect=emqx_admin.AdminError("emqx_credential_api_unsupported")):
+            operation = mqtt_lifecycle.request_operation(self.admin, ADMIN, "node01", "revoke")
+        response = self.client.patch("/api/devices/node01/lifecycle", headers=self.headers(),
+                                     json={"lifecycle_status": "active"})
+        self.assertEqual(response.status_code, 409, response.text)
+        device = self.db.row("SELECT * FROM devices")
+        self.assertEqual((device["lifecycle_status"], device["credential_status"], device["mqtt_sync_status"]),
+                         ("blocked", "revoked", "failed"))
+        self.assertEqual(device["mqtt_operation_id"], operation["operation_id"])
+
+    def test_lifecycle_pause_interrupts_pending_control(self):
+        self.db.device()
+        storage.save(self.sample())
+        response = self.client.post("/api/devices/node01/thresholds", headers=self.headers(), json=self.threshold_body())
+        self.assertEqual(response.status_code, 202, response.text)
+        response = self.client.patch("/api/devices/node01/lifecycle", headers=self.headers(),
+                                     json={"lifecycle_status": "maintenance"})
+        self.assertEqual(response.status_code, 200, response.text)
+        command = self.db.row("SELECT status, error_message FROM device_commands")
+        self.assertEqual(command, {"status": "interrupted", "error_message": "device_lifecycle_changed"})
+        response = self.client.post("/api/devices/node01/thresholds", headers=self.headers(), json=self.threshold_body())
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertEqual(len(self.mqtt.published), 1)
+
     def test_mqtt_revoke_partial_retry_reissue_and_stale_retry(self):
         self.db.device()
         self.admin.users["u_node01"] = "old-password"

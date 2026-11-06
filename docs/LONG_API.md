@@ -25,7 +25,7 @@ Lịch sử telemetry/lệnh lọc theo phòng **đã ghi trong bản ghi**, kh�
 | GET | `/api/devices/{id}` | Metadata, phiên bản, last_seen_at, vòng đời và kết quả đồng bộ MQTT |
 | PATCH | `/api/devices/{id}` | device_name, board_model, hardware_version, firmware_version, mqtt_client_id |
 | PATCH | `/api/devices/{id}/room` | `{"room_id":"102"}`; kiểm tra cả phòng nguồn và đích, ghi audit |
-| PATCH | `/api/devices/{id}/lifecycle` | Vòng đời/ghi chú; kích hoạt chỉ khi credential active và đồng bộ synced |
+| PATCH | `/api/devices/{id}/lifecycle` | Vòng đời/ghi chú; kích hoạt lần đầu cần synced; mở lại sau tạm dừng có kiểm tra nhật ký |
 | GET | `/api/history?device_id={id}&limit=20&from=...&to=...` | Telemetry có lọc thời gian và quyền phòng lịch sử |
 | POST | `/api/devices/{id}/thresholds` | Gửi ngưỡng, trả `202` pending hoặc kết quả không cần gửi |
 | POST | `/api/devices/{id}/buzzer-test` | Thử/dừng còi và LED, trả `202` |
@@ -105,6 +105,30 @@ Luồng cấp: chặn backend → kiểm tra khả năng/quyền đọc/policy �
 Luồng thu hồi: commit credential revoked và lifecycle blocked/decommissioned **trước** mọi yêu cầu HTTP → deny topic → xóa tài khoản → tra username và ngắt từng Client ID liên quan → kiểm tra không còn phiên → ghi kết quả. Chỉ disconnect mà không xóa tài khoản không được coi là thu hồi.
 
 Tạm blocked/maintenance chỉ chặn hoạt động backend, giữ thông tin MQTT để có thể mở lại theo vòng đời. Thu hồi/cấp lại là thao tác khác. decommissioned không thể mở/cấp lại; vẫn cho phép retry thu hồi chưa hoàn tất.
+
+### Khóa/mở lại và bảo trì tại backend
+
+Dùng `PATCH /api/devices/{id}/lifecycle` với một trong các body:
+
+```json
+{"lifecycle_status":"blocked"}
+```
+
+```json
+{"lifecycle_status":"maintenance","maintenance_note":"Bảo trì cảm biến"}
+```
+
+```json
+{"lifecycle_status":"active"}
+```
+
+Khóa/bảo trì ngừng ghi telemetry và chặn lệnh điều khiển mới; các lệnh đang chờ được ghi interrupted, không phát thêm lệnh vật lý để hủy. Bản tin/lệnh đã tới ESP không bị thu hồi bởi việc đổi trạng thái tại BE. Tài khoản/quyền/phiên MQTT, credential_status và mqtt_sync_status được giữ nguyên. Mở lại nhận các bản tin mới, không khôi phục các bản tin đã bị từ chối trong lúc tạm dừng.
+
+Với node đang active/active nhưng mqtt_sync_status=unknown (ví dụ node demo hoặc tài khoản đã được cấu hình ngoài BE), BE lưu thông tin MQTT trong audit khi tạm dừng. Có thể mở lại nếu chuỗi nhật ký từ lần active gần nhất xác nhận việc tạm dừng và MQTT username/credential/operation không đổi. Nhật ký nằm trong DB nên không phụ thuộc phiên trình duyệt hay bộ nhớ backend. Sửa ghi chú trong lúc bảo trì không làm mất khả năng mở lại. mqtt_sync_status vẫn là unknown, không bị đổi thành synced.
+
+Kích hoạt lần đầu vẫn cần credential active và synced. Node pending/revoked, thao tác MQTT pending/failed, tài khoản MQTT đã đổi, hoặc thiếu nhật ký tạm dừng phù hợp sẽ nhận 409. Không dùng PATCH active để bỏ qua thao tác thu hồi dở dang. Chỉ admin/owner đúng phạm vi được đổi trạng thái; tenant nhận 403. Response thành công trả 200 cùng device_id, lifecycle_status, credential_status và mqtt_sync_status.
+
+Kịch bản tự kiểm thử bằng Swagger và Workbench: [BE_LIFECYCLE_TEST](BE_LIFECYCLE_TEST.md).
 
 ```json
 {"operation_id":"0123456789abcdef0123456789abcdef","action":"revoke","status":"incomplete","steps":{"backend_blocked":"succeeded","capabilities":"failed"},"error_code":"emqx_http_403","message":"Chưa hoàn tất tại EMQX; backend vẫn chặn node. Có thể thử lại."}

@@ -1,21 +1,31 @@
-# Trạng thái sửa theo checklist của Long — 06/11/2026
+# Trạng thái sửa theo checklist của Long — cập nhật 07/11/2026
 
-Đã triển khai theo CHECKLIST_CONG_VIEC_LONG.md được cung cấp. Chưa áp dụng migration hoặc cấu hình lên database/broker vận hành. Các thay đổi firmware có sẵn trong workspace được giữ nguyên.
+Tài liệu phân biệt phần đã có trong code, đã kiểm thử và còn cần tích hợp theo CHECKLIST_CONG_VIEC_LONG.md. Backend đã dùng MySQL và có quan sát telemetry thật trên DB test local; chưa có deployment production và chưa hoàn tất toàn bộ checklist. Hướng dẫn máy nhận: [RUN_BACKEND_WINDOWS](RUN_BACKEND_WINDOWS.md); bản ngắn gửi nhóm: [HANDOVER_SUMMARY](HANDOVER_SUMMARY.md).
 
 ## Đối chiếu phạm vi
 
 | Mục checklist | Đã triển khai và kiểm tra cục bộ | Còn cần môi trường/đồng đội |
 |---|---|---|
-| 1. Ingestion | Chỉ active/active; kiểm tra registry; receiver từ chối có kiểm soát; chống trùng toàn bộ ID; khóa dòng chống race với thu hồi | Nghiệm thu telemetry của ESP thật trên DB nhóm |
-| 2. MQTT | Adapter API v5; cấu hình admin riêng; cấp/thu hồi/cấp lại; tài khoản mới; ACL topic riêng; tra username/ngắt Client ID thực; trạng thái từng bước, audit, retry, xử lý một phần | Chưa xác minh deployment, key/quyền API thật, ACL và khả năng kết nối lại bằng thông tin cũ |
+| 1. Ingestion | Chỉ active/active; kiểm tra registry; chống trùng toàn bộ ID; khóa dòng chống race; đã quan sát node01/node02 ghi MySQL qua EMQX và bản tin MQTTX riêng | Nghiệm thu đủ reconnect, restart, chống trùng và lỗi trên môi trường nhóm |
+| 2. MQTT | Adapter API v5; cấu hình admin riêng; cấp/thu hồi/cấp lại; tài khoản mới; ACL topic riêng; tra username/ngắt Client ID thực; journal/audit/retry | Cấu hình Serverless hiện tại chưa hỗ trợ adapter, admin đang disabled; chưa nghiệm thu quản lý tài khoản/ACL/ngắt phiên và từ chối thông tin cũ trên broker thật |
 | 3. Lịch sử lệnh | Commit queued trước publish; người gửi/phòng/payload; ACK/timeout; xử lý mất DB/MQTT, restart; API lịch sử bền vững | ACK và đầu ra trên ESP thật |
-| 4. Metadata/phòng | last_seen_at chỉ đổi khi INSERT mới; cập nhật/trả phiên bản; API chuyển phòng + audit; liệt kê node chưa online; giữ phòng lịch sử; tách vòng đời/kết nối/sensor | Firmware có thể bổ sung phiên bản tùy chọn; luồng QTV đăng ký trước/chủ trọ nhận sau chưa được nhóm quyết định |
+| 4. Metadata/phòng/vòng đời | last_seen_at chỉ đổi khi INSERT mới; metadata/chuyển phòng + audit; node chưa online vẫn được liệt kê; khóa/mở và bảo trì/hoạt động có kiểm tra nhật ký, không đổi thông tin MQTT | Người dùng nghiệm thu lifecycle trên môi trường thật; luồng QTV đăng ký trước/chủ trọ nhận sau cần nhóm quyết định |
 | 5. Lọc lịch sử | ISO 8601 có múi giờ, kiểm tra thứ tự, UTC, SQL tham số và phạm vi phòng đã ghi | Chưa phân trang vượt 100 mẫu; không nằm trong yêu cầu hiện tại |
-| 6. Phân quyền | Dùng adapter JWT hiện có; kiểm tra account active và role DB; owner theo house, tenant theo room_users; chặn điều khiển trái quyền | Người 3 cấp token từ luồng đăng nhập thật; người 4 nối frontend vào hợp đồng API |
+| 6. Phân quyền | Adapter JWT; kiểm tra account active và role DB; owner theo house, tenant theo room_users; đã thử các tài khoản fixture | Vĩ cung cấp đăng ký/đăng nhập và JWT thật; Nguyên nối frontend vào API |
 | 7. Schema/migration | init.sql duy nhất; migration lặp lại được, giữ history; hỗ trợ schema cũ 50 ký tự; sửa index tiền tố; UTC từng phiên; lỗi DB được che thông tin | Sao lưu rồi chạy migration trên môi trường nhóm; đối chiếu múi giờ dữ liệu cũ nếu từng dùng NOW() sai múi giờ |
-| 8. Kiểm thử/bàn giao | Cập nhật README MySQL, cấu hình mẫu, API/request/response/lỗi; smoke test dùng token thật và ID 1001/1002/1003 | Kiểm thử đăng nhập thật, EMQX thật, hai node và phần cứng |
+| 8. Kiểm thử/bàn giao | README MySQL/CMD, cấu hình mẫu, API/request/response/lỗi; smoke script hỗ trợ token dịch vụ tài khoản và ID 1001/1002/1003 | Chưa chạy smoke bằng đăng nhập thật; còn nghiệm thu EMQX admin, hai node/phần cứng và deploy |
 
 ## Kết quả đã chạy
+
+### Bổ sung ngày 07/11/2026: khóa/mở lại và bảo trì tại BE
+
+- Sửa ngay PATCH lifecycle: node đã active/active với mqtt_sync_status=unknown có thể tạm blocked/maintenance rồi trở lại active nếu nhật ký tạm dừng xác nhận cùng thông tin MQTT. Không đổi unknown thành synced, không cấp/thu hồi tài khoản broker.
+- Nhật ký được lưu trong DB; sửa ghi chú hoặc chuyển maintenance sang blocked vẫn giữ được khả năng mở lại. Kích hoạt lần đầu, credential pending/revoked, thông tin MQTT đổi và thao tác MQTT pending/failed vẫn bị từ chối.
+- Khi khóa/bảo trì, các lệnh đang chờ được ghi interrupted. Không gửi thêm lệnh vật lý và không khẳng định đã hủy lệnh từng đến ESP.
+- Kiểm thử sau sửa: **45/45 ca cô lập đạt**; **9/9 ca lifecycle trên MySQL 5.7 riêng đạt**. MySQL dùng database test tên ngẫu nhiên, không thay đổi trạng thái node của iot_db. Broker/token trong các ca này vẫn là fixture.
+- Hướng dẫn người dùng tự nghiệm thu với ESP/EMQX đang chạy: [BE_LIFECYCLE_TEST](BE_LIFECYCLE_TEST.md). Cần khởi động lại backend đang chạy để nạp code mới.
+
+### Mốc kiểm thử ban đầu ngày 06/11/2026
 
 - Bộ cô lập: **37/37 đạt**. API/controller chạy thật trong tiến trình, lưu qua adapter SQLite, MQTT/EMQX giả; token là fixture, không chứng minh đăng nhập thật.
 - Bộ MySQL chính trên bản cuối: **36/36 đạt**, gồm startup/shutdown. MySQL **5.7.44** chạy riêng trên 127.0.0.1:13317, datadir test-output/mysql-long-review/data, database tên ngẫu nhiên. Không sử dụng database của dịch vụ MySQL57 đang chạy.
@@ -31,9 +41,9 @@ Lệnh chạy từ gốc repo:
 .venv/Scripts/python.exe tests/backend/mysql_integration.py
 ```
 
-Bằng chứng máy cục bộ được lưu trong test-output/mysql-long-review/isolated-results.json và mysql-results.json; thư mục test-output được Git bỏ qua. Cách dựng/dừng server thử riêng ở [tests/README](../tests/README.md). Không cộng các lần chạy lại thành số ca riêng và không tính broker/token giả là nghiệm thu EMQX hoặc đăng nhập thật.
+Bằng chứng JSON của mốc 37/36 được lưu cục bộ trong test-output/mysql-long-review/isolated-results.json và mysql-results.json; thư mục test-output được Git bỏ qua. Mốc 45/9 sau sửa lifecycle được xác nhận bằng kết quả chạy unittest trong phiên sửa; không gán các file JSON mốc cũ cho lần chạy mới. Cách dựng/dừng server thử riêng ở [tests/README](../tests/README.md). Không cộng các lần chạy lại thành số ca riêng và không tính broker/token giả là nghiệm thu EMQX hoặc đăng nhập thật.
 
-Sau kiểm thử, server MySQL tạm ở 13317 đã được dừng; dịch vụ MySQL57 ban đầu vẫn chạy. Dữ liệu thử được giữ trong thư mục bị Git bỏ qua để đối chiếu.
+Instance MySQL test riêng dùng cổng 13317 và datadir dưới test-output, do người chạy chủ động bật/tắt. Đây là cấu hình của máy bàn giao, không phải server đi kèm khi clone repo. Dữ liệu thử không được đóng gói hoặc đưa vào Git.
 
 ## Việc cần cung cấp để chạy hệ thống nhóm
 
