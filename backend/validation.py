@@ -59,6 +59,10 @@ def validate_message(raw):
     require(isinstance(raw, bytes) and len(raw) <= 4096, "Kích thước bản tin không hợp lệ")
     data = json.loads(raw.decode("utf-8"))
     require(type(data) is dict, "Bản tin phải là JSON object")
+    for key, maximum in (("hardware_version", 32), ("firmware_version", 64)):
+        if key in data:
+            require(isinstance(data[key], str) and 0 < len(data[key]) <= maximum
+                    and all(ord(character) >= 32 for character in data[key]), key + " không hợp lệ")
     require(integer(data.get("schema_version"), 2, 6),
             "Chỉ nhận bản tin node_full schema_version từ 2 đến 6")
     supports_flame = data["schema_version"] >= 3

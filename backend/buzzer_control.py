@@ -1,7 +1,6 @@
 """Acknowledged buzzer and red LED tests; stopping never mutes real alarms."""
 import copy
 import json
-import threading
 import time
 import uuid
 from typing import Literal
@@ -11,6 +10,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from remote_control import COMMAND_TIMEOUT_SECONDS
+from command_journal import JournalController
 
 
 class BuzzerTestUpdate(BaseModel):
@@ -26,11 +26,9 @@ def supported(data):
             and type(test.get("version")) is int and test["version"] == 2)
 
 
-class BuzzerController:
-    def __init__(self, client):
-        self.client = client
-        self.lock = threading.Lock()
-        self.commands = {}
+class BuzzerController(JournalController):
+    command_type = "buzzer_test"
+    supported = staticmethod(supported)
 
     @staticmethod
     def public(command):
@@ -60,11 +58,11 @@ class BuzzerController:
                 "blocked": "ESP đang có cảnh báo thật nên không bắt đầu lượt thử còi và đèn.",
                 "interrupted": "Lượt thử còi và đèn đã nhường cho cảnh báo thật của ESP.",
             }
-            if state == "running" and now >= command["deadline"] and not item["online"]:
+            if state == "running" and now >= command["deadline"]:
                 command.update(status="timeout", message="Mất dữ liệu từ ESP; chưa xác nhận được kết thúc lượt thử còi và đèn.")
             elif state in messages:
                 command.update(status=state, message=messages[state])
-        elif command["status"] in ("pending", "running"):
+        elif command["status"] in ("pending", "running", "unconfirmed"):
             if (not supported(data) or data["boot_id"] != command["boot_id"]
                     or test.get("command_seq") != command["expected_seq"]):
                 command.update(status="superseded", message="ESP hoặc lệnh điều khiển đã thay đổi; kiểm tra lại trạng thái.")
@@ -72,13 +70,7 @@ class BuzzerController:
                 command.update(status="timeout", message="Chưa nhận được xác nhận từ ESP; không tự gửi lại lệnh thử còi và đèn.")
         return command
 
-    def snapshot(self, item, now=None):
-        with self.lock:
-            command = self._refresh(item, time.monotonic() if now is None else now)
-            return {"supported": supported(item["data"]),
-                    "pending": self.public(command) if command else None}
-
-    def submit(self, item, body, connected):
+    def submit(self, item, body, connected, user):
         with self.lock:
             now, data = time.monotonic(), item["data"]
             if not item["online"]:
@@ -90,8 +82,9 @@ class BuzzerController:
             test = data["buzzer_test"]
             if body.expected_boot_id != data["boot_id"] or body.expected_seq != test["command_seq"]:
                 raise HTTPException(409, "Trạng thái ESP đã đổi; chờ dữ liệu mới rồi thử lại.")
-            previous = self._refresh(item, now)
-            if previous and previous["status"] == "pending":
+            self.latest[data["device_id"]] = copy.deepcopy(item)
+            previous = self.reconcile(item, now)
+            if previous and previous["status"] in ("pending", "unconfirmed"):
                 raise HTTPException(409, "Đang chờ ESP xác nhận lệnh thử còi và đèn trước.")
             if body.action == "start" and data["system_state"] == "alarm":
                 raise HTTPException(409, "Đang có cảnh báo thật; chưa bắt đầu thử còi và đèn.")
@@ -104,6 +97,7 @@ class BuzzerController:
             if body.action == "stop" and not test["active"]:
                 command.update(status="stopped", noop=True,
                                message="Không có lượt thử còi và đèn đang chạy. Lệnh này không tắt cảnh báo thật.")
+                self.record(command, item, self.command_type, None, user, COMMAND_TIMEOUT_SECONDS)
                 self.commands[data["device_id"]] = command
                 return self.public(command)
             if test["command_seq"] == 2**32 - 1:
@@ -113,13 +107,13 @@ class BuzzerController:
                     "expires_uptime_s": int(data["uptime_s"] + max(0, item["age_seconds"])
                                             + COMMAND_TIMEOUT_SECONDS),
                     "action": body.action}
-            try:
+            self.record(command, item, self.command_type, wire, user, COMMAND_TIMEOUT_SECONDS)
+            def publish():
                 result = self.client.publish("iot/devices/" + data["device_id"] + "/buzzer/test",
                                              json.dumps(wire, separators=(",", ":"), allow_nan=False),
                                              qos=1, retain=False)
                 if result.rc != mqtt.MQTT_ERR_SUCCESS:
                     raise RuntimeError("publish failed")
-            except (OSError, RuntimeError, ValueError):
-                raise HTTPException(503, "Không gửi được lệnh thử còi và đèn; hãy kiểm tra MQTT.") from None
             self.commands[data["device_id"]] = command
+            self.dispatch(command, user, publish)
             return self.public(command)

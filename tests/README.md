@@ -1,5 +1,32 @@
 # Kiểm thử firmware P1
 
+## Backend theo checklist của Long
+
+Từ thư mục gốc, cài backend/requirements-dev.txt vào môi trường riêng rồi chạy:
+
+```powershell
+.venv/Scripts/python.exe -m unittest discover -s tests/backend -v
+```
+
+Đây là API/controller thật với adapter SQLite và broker giả. Kiểm thử SQLite không xác nhận cú pháp/ràng buộc/khóa MySQL. Bộ riêng ở tests/backend/mysql_integration.py chạy cùng API trên MySQL thật và kiểm tra schema mới, migration hai schema cũ, khóa độc quyền, bảo toàn history và tranh chấp giữa thu hồi/telemetry.
+
+Ví dụ tạo MySQL **tạm riêng** bằng binary MySQL 5.7 đã cài; không dùng datadir của dịch vụ đang có:
+
+```powershell
+$mysqlBin = 'C:\Program Files\MySQL\MySQL Server 5.7\bin'
+$mysqlTestRoot = Join-Path (Get-Location).Path 'test-output\mysql-long-review'
+$mysqlTestData = Join-Path $mysqlTestRoot 'data'
+New-Item -ItemType Directory -Path $mysqlTestData -Force | Out-Null
+# Chỉ initialize khi datadir này chưa có dữ liệu.
+& "$mysqlBin\mysqld.exe" --no-defaults --initialize-insecure "--datadir=$mysqlTestData" --log_syslog=0
+$mysqlTestArgs = @('--no-defaults', ('--datadir="' + $mysqlTestData + '"'), '--port=13317', '--bind-address=127.0.0.1', '--log_syslog=0', '--explicit_defaults_for_timestamp=1')
+Start-Process -FilePath "$mysqlBin\mysqld.exe" -ArgumentList $mysqlTestArgs -WindowStyle Hidden
+.venv/Scripts/python.exe tests/backend/mysql_integration.py
+& "$mysqlBin\mysqladmin.exe" --no-defaults --protocol=tcp --host=127.0.0.1 --port=13317 --user=root shutdown
+```
+
+Script kiểm tra chính xác datadir và cổng trước khi tạo database ngẫu nhiên; không chạy trên database vận hành, không xóa database cũ. Kết quả JSON được lưu dưới test-output/mysql-long-review. Broker và token trong bộ MySQL vẫn là fixture; EMQX và luồng đăng nhập thật cần nghiệm thu theo [LONG_API](../docs/LONG_API.md). [Trạng thái triển khai](../docs/LONG_IMPLEMENTATION_STATUS.md) ghi phạm vi bằng chứng cụ thể.
+
 Các mục dưới đây gồm biên dịch sketch, kịch bản phần cứng và kiểm tra native C++. Kết quả phần mềm không xác nhận mọi bài thử vật lý đã đạt trên hai node. Xem [TEST_STATUS](../docs/TEST_STATUS.md) để phân biệt các mốc kết quả và phần nghiệm thu còn chờ.
 
 ## Kiểm tra tại thời điểm biên dịch
