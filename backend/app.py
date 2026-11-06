@@ -2,17 +2,19 @@ import logging
 import re
 import threading
 from contextlib import asynccontextmanager
+import json
+import pymysql
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import paho.mqtt.client as mqtt
-import pymysql
 from fastapi import FastAPI, HTTPException, Query, Request, Path as ApiPath
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 
 from settings import load_settings
-from storage import configure as configure_storage, initialize, save, read_latest, history
+from storage import (StorageError, DeviceNotRegistered, DeviceNotAllowed, configure as configure_storage,
+                     initialize, save, read_latest, history)
 from validation import validate_message
 from remote_control import RemoteController, ThresholdUpdate
 from buzzer_control import BuzzerController, BuzzerTestUpdate
@@ -27,8 +29,8 @@ class Receiver:
     def __init__(self, config):
         self.config = config
         self.lock = threading.Lock()
-        self.status = {"connected": False, "accepted": 0, "rejected": 0, "last_error": None}
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="iot-full-backend")
+        self.status = {"connected": False, "accepted": 0, "rejected": 0, "duplicates": 0, "last_error": None}
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=config.get("mqtt_client_id", "iot-full-backend"))
         self.client.on_connect = self.on_connect
         self.client.on_disconnect = self.on_disconnect
         self.client.on_message = self.on_message
@@ -76,15 +78,35 @@ class Receiver:
             with self.lock:
                 self.status["rejected"] += 1
             return  # Never log a raw untrusted payload or credentials.
-        except pymysql.MySQLError as exc:
-            self.update(last_error="Không ghi được MySQL; kiểm tra kết nối, tài khoản và quyền ghi")
-            # Chỉ log loại lỗi/mã lỗi, không log payload hay thông tin đăng nhập.
-            logger.error("MySQL write failed: %s (%s)", type(exc).__name__, exc.args[0] if exc.args else "?")
-            return
-        if inserted:
+        except DeviceNotRegistered:
+            # Node chưa có trong bảng devices (khóa ngoại 1452): từ chối bản tin, vẫn nhận các node khác.
             with self.lock:
+                self.status["rejected"] += 1
+                self.status["last_error"] = "Thiết bị chưa đăng ký trong bảng devices"
+            return
+        except DeviceNotAllowed:
+            # Node có trong bảng devices nhưng đang bị khóa / đã ngừng sử dụng / credential bị thu hồi.
+            with self.lock:
+                self.status["rejected"] += 1
+                self.status["last_error"] = "Thiết bị bị khóa, ngừng sử dụng hoặc đã thu hồi credential"
+            return
+        except StorageError:
+            # storage.py đã log loại lỗi/mã lỗi; không log payload hay thông tin đăng nhập.
+            self.update(last_error="Không ghi được MySQL; kiểm tra kết nối, tài khoản và quyền ghi")
+            return
+        except Exception as exc:
+            # Một bản tin lỗi bất ngờ không được làm chết luồng nhận MQTT của paho.
+            with self.lock:
+                self.status["rejected"] += 1
+                self.status["last_error"] = "Lỗi xử lý telemetry: " + type(exc).__name__
+            logger.error("Unexpected telemetry error: %s", type(exc).__name__)
+            return
+        with self.lock:
+            if inserted:
                 self.status["accepted"] += 1
-                self.status["last_error"] = None
+            else:
+                self.status["duplicates"] += 1  # trùng (device_id, boot_id, seq): bỏ qua, không làm mới
+            self.status["last_error"] = None
 
     def start(self):
         self.client.connect_async(self.config["mqtt_host"], self.config["mqtt_port"], keepalive=30)
@@ -139,7 +161,7 @@ def health():
 def devices():
     try:
         items = read_latest()
-    except pymysql.MySQLError:
+    except StorageError:
         raise HTTPException(503, "Chưa đọc được dữ liệu cảm biến") from None
     for item in items:
         item["remote_control"] = app.state.remote_control.snapshot(item)
@@ -175,7 +197,7 @@ def update_thresholds(request: Request, body: ThresholdUpdate,
     try:
         item = next((item for item in read_latest()
                      if item["data"]["device_id"] == device_id), None)
-    except pymysql.MySQLError:
+    except StorageError:
         raise HTTPException(503, "Chưa đọc được dữ liệu cảm biến.") from None
     if item is None:
         raise HTTPException(404, "Chưa có dữ liệu của ESP này.")
@@ -189,7 +211,7 @@ def test_buzzer(request: Request, body: BuzzerTestUpdate,
     try:
         item = next((item for item in read_latest()
                      if item["data"]["device_id"] == device_id), None)
-    except pymysql.MySQLError:
+    except StorageError:
         raise HTTPException(503, "Chưa đọc được dữ liệu cảm biến.") from None
     if item is None:
         raise HTTPException(404, "Chưa có dữ liệu của ESP này.")
@@ -201,8 +223,11 @@ def device_history(device_id: str = Query(pattern=r"^[A-Za-z0-9_-]{1,32}$"),
                    limit: int = Query(default=20, ge=1, le=100)):
     try:
         items = history(device_id, limit)
-    except pymysql.MySQLError:
+    except StorageError:
         raise HTTPException(503, "Chưa đọc được lịch sử") from None
     return {"items": items}
 
 
+# --- Đăng ký thiết bị & quản lý vòng đời (Registry & Lifecycle) ---
+from devices_api import router as devices_router  # noqa: E402
+app.include_router(devices_router)

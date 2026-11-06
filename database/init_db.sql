@@ -87,7 +87,7 @@ CREATE TABLE history (
     flame_do INT NULL, -- Lưu đúng mức tín hiệu DO của cảm biến lửa
     raw_payload TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_history_message (device_id(30), boot_id, seq), -- Chống trùng lặp bản tin MQTT khi reconnect[cite: 1]
+    UNIQUE KEY uq_history_sample_full (device_id, boot_id, seq), -- Chống trùng bản tin MQTT khi reconnect; dùng TOÀN BỘ device_id (không tiền tố) vì storage.initialize() yêu cầu vậy
     INDEX idx_device_time (device_id, timestamp),
     INDEX idx_room_time (room_id, timestamp),
     FOREIGN KEY (device_id) REFERENCES devices(device_id),
