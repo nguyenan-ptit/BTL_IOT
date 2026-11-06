@@ -2,7 +2,6 @@
 import copy
 import json
 import math
-import threading
 import time
 import uuid
 from decimal import Decimal
@@ -10,6 +9,7 @@ from decimal import Decimal
 import paho.mqtt.client as mqtt
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
+from command_journal import JournalController
 
 COMMAND_TIMEOUT_SECONDS = 20
 
@@ -56,11 +56,9 @@ def supported(data):
             and type(remote.get("version")) is int and remote["version"] == 1)
 
 
-class RemoteController:
-    def __init__(self, client):
-        self.client = client
-        self.lock = threading.Lock()
-        self.commands = {}
+class RemoteController(JournalController):
+    command_type = "thresholds"
+    supported = staticmethod(supported)
 
     @staticmethod
     def public(command):
@@ -78,7 +76,7 @@ class RemoteController:
                 and remote.get("revision") == command["expected_revision"] + 1
                 and current_thresholds(data) == command["thresholds"]):
             command.update(status="applied", message="ESP đã áp dụng và lưu ngưỡng mới.")
-        elif command["status"] == "pending":
+        elif command["status"] in ("pending", "unconfirmed"):
             if (data["boot_id"] != command["boot_id"] or not supported(data)
                     or remote.get("revision") != command["expected_revision"]):
                 command.update(status="superseded",
@@ -88,13 +86,7 @@ class RemoteController:
                                message="Chưa nhận được xác nhận từ ESP. Hãy kiểm tra kết nối và ngưỡng đang dùng.")
         return command
 
-    def snapshot(self, item, now=None):
-        with self.lock:
-            command = self._refresh(item, time.monotonic() if now is None else now)
-            return {"supported": supported(item["data"]),
-                    "pending": self.public(command) if command else None}
-
-    def submit(self, item, body, connected):
+    def submit(self, item, body, connected, user):
         with self.lock:
             now = time.monotonic()
             data = item["data"]
@@ -108,8 +100,9 @@ class RemoteController:
             if (body.expected_boot_id != data["boot_id"]
                     or body.expected_revision != remote["revision"]):
                 raise HTTPException(409, "Dữ liệu cấu hình đã thay đổi; tải lại ngưỡng đang dùng rồi thử lại.")
-            existing = self._refresh(item, now)
-            if existing and existing["status"] == "pending":
+            self.latest[data["device_id"]] = copy.deepcopy(item)
+            existing = self.reconcile(item, now)
+            if existing and existing["status"] in ("pending", "unconfirmed"):
                 raise HTTPException(409, "Đang chờ ESP xác nhận lệnh trước.")
             thresholds = body.thresholds.model_dump()
             command = {"request_id": uuid.uuid4().hex, "status": "pending",
@@ -119,6 +112,7 @@ class RemoteController:
                        "message": "Đã gửi yêu cầu; đang chờ ESP xác nhận ngưỡng đã lưu."}
             if thresholds == current_thresholds(data):
                 command.update(status="applied", message="ESP đang dùng các ngưỡng này; không cần gửi lại.")
+                self.record(command, item, self.command_type, None, user, COMMAND_TIMEOUT_SECONDS)
                 self.commands[data["device_id"]] = command
                 return self.public(command)
             if remote["revision"] == 2**32 - 1:
@@ -128,13 +122,13 @@ class RemoteController:
                     "expires_uptime_s": int(data["uptime_s"] + max(0, item["age_seconds"])
                                             + COMMAND_TIMEOUT_SECONDS),
                     "thresholds": thresholds}
-            try:
+            self.record(command, item, self.command_type, wire, user, COMMAND_TIMEOUT_SECONDS)
+            def publish():
                 info = self.client.publish("iot/devices/" + data["device_id"] + "/config/set",
                                            json.dumps(wire, separators=(",", ":"), allow_nan=False),
                                            qos=1, retain=False)
                 if info.rc != mqtt.MQTT_ERR_SUCCESS:
                     raise RuntimeError("publish failed")
-            except (OSError, RuntimeError, ValueError):
-                raise HTTPException(503, "Không gửi được lệnh MQTT; hãy kiểm tra kết nối.") from None
             self.commands[data["device_id"]] = command
+            self.dispatch(command, user, publish)
             return self.public(command)

@@ -9,8 +9,18 @@
   "mysql": {
     "host": "localhost",
     "port": 3306,
-    "user": "root",
-    "password": "Mật_khẩu_MySQL_của_bạn",
-    "database": "iot_db"
+    "user": "iot_app",
+    "password": "",
+    "database": "iot_db",
+    "ssl_ca": null
+  },
+  "emqx_admin": {
+    "deployment": "disabled",
+    "base_url": "",
+    "api_key": "",
+    "api_secret": "",
+    "policy_verified": false,
+    "legacy_node_usernames": {},
+    "timeout_s": 5
   }
 }

@@ -3,6 +3,7 @@ import ast
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 HERE = Path(__file__).resolve().parent
 
@@ -69,6 +70,14 @@ def load_settings():
     discovery_key = Path(discovery_key)
     config["discovery_key_path"] = discovery_key if discovery_key.is_absolute() else HERE / discovery_key
     config["mysql"] = _load_mysql(config.get("mysql"))
+    if config["mysql"].get("ssl_ca"):
+        mysql_ca = Path(config["mysql"]["ssl_ca"])
+        if not mysql_ca.is_absolute():
+            mysql_ca = path.parent / mysql_ca
+        if not mysql_ca.is_file():
+            raise ValueError("Không tìm thấy CA MySQL")
+        config["mysql"]["ssl_ca"] = str(mysql_ca)
+    config["emqx_admin"] = _load_emqx(config.get("emqx_admin", {}), path.parent)
     return config
 
 
@@ -93,4 +102,54 @@ def _load_mysql(block):
         raise ValueError("Thiếu mật khẩu MySQL; đặt mysql.password trong settings.local.json hoặc biến IOT_MYSQL_PASSWORD")
     if type(mysql.get("port")) is not int or not 1 <= mysql["port"] <= 65535:
         raise ValueError("mysql.port không hợp lệ")
-    return {k: mysql[k] for k in ("host", "port", "user", "password", "database")}
+    mysql["ssl_ca"] = os.environ.get("IOT_MYSQL_SSL_CA", mysql.get("ssl_ca"))
+    if mysql["ssl_ca"] is not None and (not isinstance(mysql["ssl_ca"], str) or not mysql["ssl_ca"].strip()):
+        raise ValueError("mysql.ssl_ca không hợp lệ")
+    return {k: mysql[k] for k in ("host", "port", "user", "password", "database", "ssl_ca")}
+
+
+def _load_emqx(block, directory):
+    if not isinstance(block, dict):
+        raise ValueError("emqx_admin phải là object")
+    config = dict(block)
+    for key, env in (("base_url", "API_URL"), ("api_key", "API_KEY"),
+                     ("api_secret", "API_SECRET"), ("deployment", "DEPLOYMENT")):
+        config[key] = os.environ.get("IOT_EMQX_" + env, config.get(key, "disabled" if key == "deployment" else ""))
+        if not isinstance(config[key], str):
+            raise ValueError("emqx_admin." + key + " phải là chuỗi")
+    if config["deployment"] not in ("disabled", "serverless", "emqx5"):
+        raise ValueError("emqx_admin.deployment phải là disabled, serverless hoặc emqx5")
+    verified = os.environ.get("IOT_EMQX_POLICY_VERIFIED")
+    if verified is not None:
+        if verified.lower() not in ("true", "false"):
+            raise ValueError("IOT_EMQX_POLICY_VERIFIED phải là true hoặc false")
+        config["policy_verified"] = verified.lower() == "true"
+    config.setdefault("policy_verified", False)
+    if type(config["policy_verified"]) is not bool:
+        raise ValueError("emqx_admin.policy_verified phải là boolean")
+    if config["base_url"]:
+        try:
+            url = urlsplit(config["base_url"])
+            valid = (url.hostname and not url.username and not url.password and not url.query and not url.fragment
+                     and (url.scheme == "https" or (url.scheme == "http" and url.hostname in ("localhost", "127.0.0.1", "::1"))))
+        except (TypeError, ValueError):
+            valid = False
+        if not valid:
+            raise ValueError("URL quản trị EMQX phải dùng HTTPS (HTTP chỉ cho loopback), không chứa thông tin đăng nhập")
+    timeout = config.get("timeout_s", 5)
+    if type(timeout) not in (int, float) or not 1 <= timeout <= 15:
+        raise ValueError("emqx_admin.timeout_s phải từ 1 đến 15")
+    config["timeout_s"] = timeout
+    legacy = config.get("legacy_node_usernames", {})
+    if not isinstance(legacy, dict) or any(not isinstance(key, str) or not isinstance(value, (str, list))
+                                          or (isinstance(value, list) and any(not isinstance(name, str) for name in value))
+                                          for key, value in legacy.items()):
+        raise ValueError("emqx_admin.legacy_node_usernames phải là ánh xạ device_id sang username hoặc danh sách username")
+    ca = config.get("ca_file")
+    if ca:
+        ca = Path(ca)
+        ca = ca if ca.is_absolute() else directory / ca
+        if not ca.is_file():
+            raise ValueError("Không tìm thấy CA API EMQX")
+        config["ca_file"] = str(ca)
+    return config
