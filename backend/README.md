@@ -2,6 +2,8 @@
 
 Backend nhận telemetry từ ESP, lưu MySQL và cung cấp API có xác thực để quản lý thiết bị, đọc dữ liệu và điều khiển. Xem [hợp đồng API và EMQX](../docs/LONG_API.md), [nâng cấp database](../database/README.md) và [kết quả kiểm thử](../docs/LONG_IMPLEMENTATION_STATUS.md).
 
+Người nhận chạy trên Windows CMD nên bắt đầu ở [RUN_BACKEND_WINDOWS](../docs/RUN_BACKEND_WINDOWS.md): cài môi trường, tạo DB/user, cấu hình MQTT TLS, đặt JWT_SECRET, tạo token test và xử lý lỗi thường gặp. [HANDOVER](../docs/HANDOVER.md) phân chia phần Long/Vĩ/Nguyên và việc còn thiếu; [bản tóm tắt gửi nhóm](../docs/HANDOVER_SUMMARY.md) có thể copy trực tiếp.
+
 ## Chuẩn bị và chạy
 
 Chạy từ thư mục gốc repository:
@@ -37,6 +39,8 @@ Dashboard thử tại http://127.0.0.1:8000/ nhận mã truy cập từ dịch v
 ## Hành vi dữ liệu và điều khiển
 
 Chỉ node đã đăng ký, lifecycle_status=active và credential_status=active mới ghi được telemetry. registered, provisioned, maintenance, blocked, decommissioned, pending và revoked đều bị từ chối. Receiver tiếp tục xử lý các node khác. Topic phải khớp device_id và không được retained.
+
+PATCH lifecycle với blocked/maintenance chỉ tạm dừng tại BE, giữ thông tin MQTT và ngắt theo dõi các lệnh đang chờ bằng trạng thái interrupted. Node đã active trước đó có thể mở lại bằng PATCH active: nếu mqtt_sync_status=unknown, cần nhật ký tạm dừng phù hợp và thông tin MQTT không đổi. Đây không phải đường kích hoạt lần đầu hoặc bỏ qua thu hồi; pending/revoked và thao tác MQTT pending/failed vẫn bị chặn. Xem [các bước test khóa/mở và bảo trì](../docs/BE_LIFECYCLE_TEST.md).
 
 Khóa chống trùng dùng toàn bộ device_id + boot_id + seq. Chỉ lần INSERT mới cập nhật last_seen_at và phiên bản tùy chọn trong telemetry. Timestamp API có UTC. Firmware hiện tại không bắt buộc gửi phiên bản; người quản lý có thể cập nhật qua PATCH thiết bị.
 

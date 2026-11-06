@@ -6,6 +6,8 @@
 
 Trong MySQL client, chạy theo thứ tự:
 
+Nếu dùng MySQL Workbench, mở từng file bằng File → Open SQL Script rồi chạy trên đúng connection, theo thứ tự dưới đây. `SOURCE` là lệnh của mysql CLI, không phải câu SQL để dán vào Workbench. Schema mẫu chọn database `iot_db`; nếu nhóm dùng tên khác cần điều chỉnh thống nhất script và cấu hình BE.
+
 ~~~sql
 SOURCE database/init.sql;
 -- Dữ liệu mô phỏng tùy chọn, chỉ cho môi trường thử:

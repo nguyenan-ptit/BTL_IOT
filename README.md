@@ -1,8 +1,8 @@
 # BTL_IOT — dự án giám sát và cảnh báo cháy/gas
 
-Repository nhóm gồm firmware ESP8266 cho hai node, frontend và backend prototype FastAPI. Backend hiện nhận telemetry từ EMQX Cloud, lưu SQLite và cung cấp API/dashboard; Long tiếp tục chuyển lớp database sang MySQL, nối frontend và hoàn thiện triển khai.
+Repository nhóm gồm firmware ESP8266 cho hai node, backend FastAPI dùng MySQL và frontend React. Backend đã nhận telemetry thật qua EMQX Cloud và lưu MySQL trong buổi kiểm thử local. Frontend vẫn mặc định dùng dữ liệu mô phỏng; đăng nhập thật, quản trị tài khoản MQTT tự động và triển khai chung chưa hoàn tất tích hợp.
 
-Phần bàn giao **Nguyễn Văn An: phần cứng/firmware ESP8266, cảm biến, LED và còi cho hai node** gồm firmware, cấu hình mẫu, hợp đồng MQTT, JSON mô phỏng và kiểm tra firmware. Hà Hải Long tiếp tục từ backend/API prototype hiện có, chuyển SQLite sang MySQL và hoàn thiện tích hợp/deployment.
+Phần **Nguyễn Văn An** gồm phần cứng/firmware ESP8266, cảm biến, LED, còi và hợp đồng MQTT. **Hà Hải Long** phụ trách MQTT, MySQL, API dữ liệu/điều khiển và vòng đời node. **Đăng Kỳ Vĩ** phụ trách dịch vụ tài khoản/xác thực, phối hợp sự cố và thông báo. **Vũ Thành Nguyên** tích hợp giao diện với API. Xem [bàn giao hiện tại](docs/HANDOVER.md) và [phần đã kiểm thử/còn thiếu](docs/LONG_IMPLEMENTATION_STATUS.md).
 
 ## Nội dung và điểm bàn giao
 
@@ -14,8 +14,8 @@ Phần bàn giao **Nguyễn Văn An: phần cứng/firmware ESP8266, cảm biế
 | `docs/` | Bàn giao, hợp đồng MQTT hiện tại, tình trạng kiểm tra và tài liệu P1 lịch sử |
 | `examples/` | Telemetry/lệnh/ACK mô phỏng theo hợp đồng MQTT hiện tại |
 | `tests/` | Kiểm tra native C++, hướng dẫn biên dịch và kịch bản kiểm tra phần cứng |
-| `backend/` | FastAPI/Paho subscriber, validation, SQLite storage, API điều khiển và dashboard prototype |
-| `database/` | Ghi chú schema SQLite hiện tại và điểm bắt đầu cho MySQL schema/migration |
+| `backend/` | FastAPI/Paho, validation, MySQL, JWT adapter, API quản lý/điều khiển và dashboard thử API |
+| `database/` | Schema MySQL chuẩn, migration, dữ liệu demo/test tùy chọn |
 | `frontend/` | Website giám sát; mặc định dùng dữ liệu giả lập |
 
 ```text
@@ -24,35 +24,35 @@ DS18B20 / MQ-2 / Flame → ESP8266 → đèn/còi tại chỗ
                             backend → database / web / Telegram
 ```
 
-Luồng ESP → EMQX → FastAPI → SQLite/API đã được kiểm tra thủ công với node02. Frontend React vẫn mặc định dùng dữ liệu giả lập; cần nối nó với API thật. Backend hiện là prototype, chưa chuyển MySQL hoặc triển khai công khai.
+Luồng ESP node01/node02 → EMQX → FastAPI → MySQL đã được quan sát trong buổi test local. Trạng thái này không xác nhận đầy đủ đầu ra còi/LED, phân quyền topic trên broker hoặc hệ thống đã được triển khai công khai. Không dùng số đo mới trong SQL để kết luận tài khoản MQTT đã được BE cấp/thu hồi thành công.
 
 Tài liệu `docs/telemetry-contract.md` và `docs/progress.md` giữ lại mốc P1 ngày 26/10/2026. Khi tích hợp firmware hiện tại, dùng [MQTT_CONTRACT](docs/MQTT_CONTRACT.md), [JSON mẫu mới](examples/README.md) và [TEST_STATUS](docs/TEST_STATUS.md).
 
 ## Bắt đầu
 
-1. Đọc [bàn giao cho Long](docs/HANDOVER.md), [sơ đồ dây](hardware/wiring.md), [sơ đồ chân hiện tại](docs/PINOUT.md) và [hợp đồng MQTT](docs/MQTT_CONTRACT.md). Ngắt mọi nguồn khi thay dây; nhánh D1 dành cho giám sát nguồn Flame 3V3.
+1. Đọc [bàn giao nhóm](docs/HANDOVER.md), [sơ đồ dây](hardware/wiring.md), [sơ đồ chân hiện tại](docs/PINOUT.md) và [hợp đồng MQTT](docs/MQTT_CONTRACT.md). Ngắt mọi nguồn khi thay dây; nhánh D1 dành cho giám sát nguồn Flame 3V3.
 2. Giữ toàn bộ thư mục `firmware/node_full` khi biên dịch. Tạo cấu hình riêng từ mẫu:
 
    ```powershell
    Copy-Item .\firmware\node_full\config.example.h .\firmware\node_full\config.h
    ```
 
-3. Điền Wi-Fi 2,4 GHz, địa chỉ broker, cổng và tài khoản MQTT do Long cấp. Mặc định dùng IPv4 broker LAN; để dùng hostname/TLS cloud, làm theo [CLOUD_MQTT](docs/CLOUD_MQTT.md). `127.0.0.1` trên ESP là chính ESP, không phải máy tính.
+3. Điền Wi-Fi 2,4 GHz, địa chỉ broker, cổng và tài khoản MQTT riêng đã được cấu hình cho node. Đối chiếu username với registry BE; việc đăng ký node chưa tự tạo tài khoản trên EMQX. Để dùng hostname/TLS cloud, làm theo [CLOUD_MQTT](docs/CLOUD_MQTT.md). `127.0.0.1` trên ESP là chính ESP, không phải máy tính.
 4. Với bo phòng 101 dùng `DEVICE_ID="node01"`, `ROOM_ID="101"`; với bo phòng 102 dùng `node02`/`102`. ID phải riêng cho mỗi ESP; phòng đặt theo vị trí thật. Bản V5 trước đây từng dùng `node02`/phòng `101`; cần thống nhất ánh xạ với backend khi đổi và phân biệt dữ liệu lịch sử.
 5. Nạp đúng bo/cổng COM bằng Arduino IDE. Serial 115200 của source hiện tại có marker `NODE_FULL_V6_DEVICE_TOPICS`. Ghi lại marker/ID trên từng bo; việc source biên dịch đạt không chứng minh nó đã được nạp.
 
-## Chạy backend prototype
+## Chạy backend MySQL
 
-Trong `backend/`, tạo `settings.local.json` từ mẫu, đặt broker/TLS/CA và thông tin đăng nhập thật; không commit file local. Cài và chạy:
+Làm theo [hướng dẫn backend từ đầu](backend/README.md): tạo môi trường Python, cấu hình MQTT/MySQL, khởi tạo DB hoặc migration, đặt JWT_SECRET rồi mới chạy server. Các lệnh sau dùng **CMD trên Windows**, chạy từ gốc repository sau khi hoàn thành cấu hình:
 
-```powershell
-cd backend
-Copy-Item .\settings.example.json .\settings.local.json
-py -m pip install -r requirements.txt
-py -m uvicorn app:app --host 127.0.0.1 --port 8000
+```bat
+set "JWT_SECRET=<khoa-dung-chung-voi-dich-vu-tai-khoan-it-nhat-32-ky-tu>"
+.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Với EMQX Serverless, cấu hình cục bộ cần `mqtt_tls: true`, cổng `8883`, topic `iot/devices/+/telemetry`, đường dẫn CA hợp lệ và `discovery_enabled: false`. Kiểm tra `/api/health`, `/api/devices`, `/api/history?device_id=node02` và trang `/`. Xem [backend README](backend/README.md); SQLite là storage prototype, Long cần chuyển sang MySQL.
+Thay placeholder JWT_SECRET bằng khóa riêng thực tế; file `.env` không được tự nạp. Mỗi DB chỉ chạy một backend/worker. `/api/health` công khai; `/api/devices`, lịch sử và thao tác quản lý cần Bearer JWT của user active trong SQL. Swagger ở http://127.0.0.1:8000/docs; `/` là trang thử API.
+
+Với EMQX Serverless, điền `mqtt_tls: true`, cổng `8883`, topic `iot/devices/+/telemetry`, file CA hợp lệ và `discovery_enabled: false`. Kết nối MQTT nhận dữ liệu hoạt động riêng với API quản trị broker. Cấu hình hiện tại chưa hỗ trợ tự động cấp/xóa tài khoản MQTT trên Serverless; xem [giới hạn và mã lỗi](docs/LONG_API.md). Test khóa/mở và bảo trì tại BE theo [BE_LIFECYCLE_TEST](docs/BE_LIFECYCLE_TEST.md).
 
 Firmware đọc `config.h`, không tự đọc `.env`. `config.h` là cấu hình riêng, đã được bỏ qua trong Git. Mẫu trong repo không chứa mật khẩu hoạt động. Mặc định `MQTT_USE_TLS=0` giữ MQTT TCP/IPv4 trong LAN, kể cả cấu hình cũ chưa khai báo macro này. Chế độ cloud phải bật riêng `MQTT_USE_TLS=1`, dùng hostname do nhà cung cấp cấp, cổng TLS (thường 8883), CA PEM trong `mqtt_ca.h` và đồng hồ SNTP sẵn sàng để kiểm tra chứng chỉ. Chế độ TLS không tự hạ xuống TCP thường khi cấu hình hoặc xác thực thất bại; xem [hướng dẫn cloud](docs/CLOUD_MQTT.md).
 
@@ -105,9 +105,10 @@ Còi nghỉ HIGH, nguồn MQ tại VV và Flame 3V3 cần đối chiếu module/
 
 | Thành viên tiếp nhận | Cần đọc / cần thống nhất |
 | --- | --- |
-| Backend (Long) | Đọc `backend/README.md`, hợp đồng MQTT và JSON mẫu; chuyển SQLite sang MySQL, giữ API/topic/schema, hoàn thiện triển khai và nghiệm thu lệnh/ACK |
-| Frontend | Trạng thái `normal/fault/alarm`, health từng cảm biến, °C/ADC, thời gian nhận cuối; hợp đồng HTTP API và dữ liệu giả có ghi mô phỏng |
-| Triển khai / bot | Cấu hình broker và truy cập, thông báo chống gửi lặp; bot là phần nâng cao, không thay web quản lý |
+| Backend (Long) | MySQL/API đã có; hoàn tất cấu hình quản trị EMQX, tích hợp xác thực/frontend, deployment và nghiệm thu lệnh/ACK |
+| Tài khoản (Vĩ) | API đăng ký/đăng nhập, băm mật khẩu, JWT; thống nhất users/role/status và phạm vi phòng với Long |
+| Frontend (Nguyên) | Đối chiếu LONG_API với hợp đồng mock, tích hợp token và các response thực tế; tắt mock sau khi đã nối API |
+| Triển khai / bot | Thống nhất dịch vụ, broker và HTTPS; thông báo chống gửi lặp là phần cần tích hợp riêng |
 | P1 | Hoàn thiện dây và nghiệm thu từng node; bổ sung ảnh thật, kết quả và log đã loại thông tin cá nhân |
 
 Mỗi người commit bằng tài khoản GitHub của mình, mô tả đúng thay đổi thật. Không tạo lịch sử commit giả. Nhóm tạo tag/release cuối sau khi tích hợp và nghiệm thu; bản bàn giao chưa phải xác nhận đạt v1.0.0.

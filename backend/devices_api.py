@@ -1,4 +1,5 @@
 """Device registry, metadata, room assignment and lifecycle."""
+import json
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -157,6 +158,45 @@ def _operation_response(operation):
                         content=operation, headers={"Cache-Control": "no-store"})
 
 
+def _can_resume_backend(cursor, device):
+    """Resume an existing active node without claiming broker synchronization.
+
+    The pause is recorded durably so a restart or a note edit cannot lose it.
+    A registered/never-activated node or a changed MQTT identity cannot use this
+    exception to the normal provisioning requirement.
+    """
+    if (device["lifecycle_status"] not in ("blocked", "maintenance")
+            or device["credential_status"] != "active"
+            or device["mqtt_sync_status"] != "unknown"
+            or device["mqtt_operation_id"] is not None):
+        return False
+    cursor.execute("SELECT details FROM audit_logs WHERE target_type = 'device' "
+                   "AND target_id = %s AND action = 'UPDATE_LIFECYCLE' ORDER BY log_id DESC",
+                   (device["device_id"],))
+    expected = device["lifecycle_status"]
+    for row in cursor.fetchall():
+        details = row["details"]
+        if isinstance(details, str):
+            details = json.loads(details)
+        if not isinstance(details, dict):
+            return False
+        if details.get("from") == details.get("to"):
+            continue  # Updating a maintenance note does not replace the pause.
+        if (details.get("to") != expected
+                or details.get("credential_status") != "active"
+                or details.get("mqtt_sync_status") != "unknown"
+                or details.get("mqtt_username") != device["mqtt_username"]
+                or "mqtt_operation_id" not in details
+                or details["mqtt_operation_id"] is not None):
+            return False
+        if details.get("from") == "active":
+            return True
+        if details.get("from") not in ("blocked", "maintenance"):
+            return False
+        expected = details["from"]
+    return False
+
+
 @router.patch("/{device_id}/lifecycle")
 def update_device_lifecycle(body: LifecycleRequest, request: Request,
                             device_id: str = ApiPath(pattern=ID_PATTERN),
@@ -179,9 +219,12 @@ def update_device_lifecycle(body: LifecycleRequest, request: Request,
         if new:
             if new not in LIFECYCLE_TRANSITIONS[device["lifecycle_status"]]:
                 raise HTTPException(409, "Chuyển trạng thái vòng đời không hợp lệ.")
-            if new == "active" and (device["credential_status"] != "active"
-                                    or device["mqtt_sync_status"] != "synced"):
-                raise HTTPException(409, "Cần cấp MQTT thành công và chuẩn bị ESP trước khi kích hoạt.")
+            if new == "active":
+                if (device["credential_status"] != "active"
+                        or (device["mqtt_sync_status"] != "synced"
+                            and not _can_resume_backend(cursor, device))):
+                    raise HTTPException(409, "Cần cấp MQTT thành công; chỉ mở lại bằng thông tin cũ "
+                                        "khi có nhật ký tạm dừng từ active và thông tin MQTT giữ nguyên.")
             updates.append("lifecycle_status = %s")
             params.append(new)
             if new == "active":
@@ -192,11 +235,18 @@ def update_device_lifecycle(body: LifecycleRequest, request: Request,
         if not updates:
             raise HTTPException(400, "Không có thông tin thay đổi.")
         cursor.execute("UPDATE devices SET " + ", ".join(updates) + " WHERE device_id = %s", (*params, device_id))
+        if new in ("blocked", "maintenance"):
+            cursor.execute("UPDATE device_commands SET status = 'interrupted', finished_at = UTC_TIMESTAMP(), "
+                           "error_message = 'device_lifecycle_changed' WHERE device_id = %s "
+                           "AND status IN ('queued', 'pending', 'running', 'unconfirmed')", (device_id,))
         audit(cursor, user["user_id"], device["room_id"], "UPDATE_LIFECYCLE", device_id,
               {"from": device["lifecycle_status"], "to": new or device["lifecycle_status"],
+               "credential_status": device["credential_status"], "mqtt_username": device["mqtt_username"],
+               "mqtt_sync_status": device["mqtt_sync_status"], "mqtt_operation_id": device["mqtt_operation_id"],
                "maintenance_note": body.maintenance_note})
-    return {"status": "success", "lifecycle_status": new or device["lifecycle_status"],
-            "credential_status": device["credential_status"]}
+    return {"status": "success", "device_id": device_id,
+            "lifecycle_status": new or device["lifecycle_status"],
+            "credential_status": device["credential_status"], "mqtt_sync_status": device["mqtt_sync_status"]}
 
 
 @router.post("/{device_id}/mqtt-credentials")
