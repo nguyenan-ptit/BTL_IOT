@@ -1,0 +1,26 @@
+{
+  "mqtt_host": "127.0.0.1",
+  "mqtt_port": 1883,
+  "mqtt_topic": "iot/devices/+/telemetry",
+  "mqtt_username": "",
+  "mqtt_password": "",
+  "mqtt_tls": false,
+  "discovery_enabled": false,
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "iot_app",
+    "password": "",
+    "database": "iot_db",
+    "ssl_ca": null
+  },
+  "emqx_admin": {
+    "deployment": "disabled",
+    "base_url": "",
+    "api_key": "",
+    "api_secret": "",
+    "policy_verified": false,
+    "legacy_node_usernames": {},
+    "timeout_s": 5
+  }
+}

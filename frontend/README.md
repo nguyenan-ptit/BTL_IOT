@@ -2,7 +2,7 @@
 
 React 19 + TypeScript + Tailwind CSS 4, Zod, nuqs, TanStack Query, React Router, chạy bằng Vite. Đặc tả nằm ở `specs/001-web-giam-sat-canh-bao/`.
 
-Backend chưa có, nên mặc định website chạy với **dữ liệu giả lập** (MSW): mọi request `/api/...` được trả lời ngay trong trình duyệt theo hợp đồng ở `specs/001-web-giam-sat-canh-bao/contracts/api.md`.
+Backend FastAPI/MySQL đã có trong `backend/`, nhưng website hiện vẫn mặc định chạy với **dữ liệu giả lập** (MSW): mọi request `/api/...` được trả lời ngay trong trình duyệt theo hợp đồng ở `specs/001-web-giam-sat-canh-bao/contracts/api.md`. Hợp đồng mock chưa khớp toàn bộ [API backend hiện tại](../docs/LONG_API.md); chỉ đổi biến môi trường sang false chưa hoàn tất tích hợp.
 
 ## Yêu cầu
 
@@ -51,6 +51,8 @@ Lưu ý: dữ liệu giả lập sống trong từng tab. Tải lại trang (F5)
 | `npm run test:e2e` | Playwright (chưa có test; cần `npx playwright install` trước) |
 
 ## Nối backend thật
+
+Nguyên cần đối chiếu các endpoint `/api/nodes`, `/api/auth/*` và kiểu JSON hiện dùng với `/api/devices`, `/api/history` và các API quản lý/điều khiển trong LONG_API. Vĩ cung cấp dịch vụ đăng ký/đăng nhập và JWT; Long hiện xác minh JWT, chưa cung cấp endpoint tự đăng nhập/đăng ký người dùng. Thống nhất response, xử lý 401/403/409/202 và bỏ qua MSW khi đã tích hợp. Phân công và các bước nghiệm thu ở [HANDOVER](../docs/HANDOVER.md).
 
 Trong `.env.local`:
 

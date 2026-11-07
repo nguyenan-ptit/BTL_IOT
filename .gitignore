@@ -1,21 +1,26 @@
-# Merge these rules into the group repository's existing .gitignore.
-*.bak
+# Local connection credentials and keys
 firmware/**/config.h
 firmware/**/secrets.h
+firmware/**/discovery_key.h
+firmware/**/mqtt_ca.h
+backend/settings.local.json
+backend/*.crt
+backend/*.pem
+backend/mqtt_passwords.local
+mosquitto-handover.local.conf
+mqtt_passwords
+*.key
 .env
 .env.*
 !.env.example
-backend/settings.local.json
-mqtt_passwords
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
-*.log
-__pycache__/
+
+# Environments, generated code and build products
 .venv/
+venv/
 .idea/
 node_modules/
+__pycache__/
+*.pyc
 test-output/
 build/
 *.bin
@@ -24,3 +29,16 @@ build/
 *.hex
 *.py[cod]
 .pytest_cache/
+*.o
+*.exe
+*.bak
+
+# Local runtime data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+.DS_Store
+Thumbs.db
+

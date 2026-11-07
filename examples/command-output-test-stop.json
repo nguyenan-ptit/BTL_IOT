@@ -1,0 +1,7 @@
+{
+  "request_id": "cccccccccccccccccccccccccccccccc",
+  "boot_id": "0123456789abcdef",
+  "expected_seq": 1,
+  "expires_uptime_s": 620,
+  "action": "stop"
+}

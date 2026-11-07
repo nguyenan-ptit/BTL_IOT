@@ -1,5 +1,7 @@
 # Tiến độ và việc còn chờ của P1
 
+> Bản lưu lịch sử ngày 26/10/2026. Các mốc bàn giao firmware mới hơn nằm ở [TEST_STATUS.md](TEST_STATUS.md); hướng dẫn tích hợp hiện tại nằm ở [HANDOVER.md](HANDOVER.md).
+
 Cập nhật bàn giao 26/10/2026. Tài liệu ghi kết quả đã có, không suy ra trạng thái online hiện tại của ESP từ dữ liệu cũ.
 
 | Hạng mục | Đã có | Chưa xác nhận / việc tiếp theo |
