@@ -22,3 +22,5 @@ build/
 *.elf
 *.map
 *.hex
+*.py[cod]
+.pytest_cache/
