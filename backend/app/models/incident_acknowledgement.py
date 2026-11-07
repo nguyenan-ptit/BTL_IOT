@@ -1,32 +1,13 @@
-
-from sqlalchemy import Column, BigInteger, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Integer
 
 from app.db.session import Base
 
 
 class IncidentAcknowledgement(Base):
-    __tablename__ = "incident_acknowledgements"
+    """Maps user acknowledgement to canonical incident_receipts."""
 
-    __table_args__ = (
-        UniqueConstraint(
-            "incident_id",
-            "user_id",
-            name="uq_incident_ack_user",
-        ),
-    )
+    __tablename__ = "incident_receipts"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-
-    incident_id = Column(
-        BigInteger,
-        ForeignKey("incidents.id"),
-        nullable=False,
-    )
-
-    user_id = Column(
-        BigInteger,
-        ForeignKey("users.id"),
-        nullable=False,
-    )
-
-    acknowledged_at = Column(DateTime, nullable=False)
+    incident_id = Column(Integer, ForeignKey("incidents.incident_id"), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"), primary_key=True)
+    acknowledged_at = Column("seen_at", DateTime, nullable=True)

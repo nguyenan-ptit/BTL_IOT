@@ -1,34 +1,34 @@
+from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String
 
-from sqlalchemy import (
-    Column,
-    BigInteger,
-    DateTime,
-    Boolean,
-    Float,
-    String,
-    ForeignKey,
-)
 from app.db.session import Base
 
 
 class Measurement(Base):
-    __tablename__ = "measurements"
+    """Read-only compatibility view of canonical telemetry history."""
+
+    __tablename__ = "history"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    node_id = Column(
-        BigInteger,
-        ForeignKey("nodes.id"),
-        nullable=False,
-    )
-    measured_at = Column(DateTime, nullable=False)
-    received_at = Column(DateTime, nullable=False)
-    is_backfill = Column(Boolean, nullable=False, default=False)
+    node_id = Column("device_id", ForeignKey("devices.device_id"), nullable=False)
+    room_id = Column(String(20), ForeignKey("rooms.room_id"), nullable=True)
+    measured_at = Column("timestamp", DateTime, nullable=False)
+    received_at = Column("created_at", DateTime, nullable=True)
+    gas_value = Column("mq2_adc", Integer, nullable=True)
+    temperature_value = Column("temperature_c", Float, nullable=True)
+    flame_detected = Column("flame_do", Integer, nullable=True)
 
-    gas_value = Column(Float, nullable=True)
-    gas_health = Column(String(20), nullable=False)
+    @property
+    def gas_health(self):
+        return "ok" if self.gas_value is not None else "fault"
 
-    temperature_value = Column(Float, nullable=True)
-    temperature_health = Column(String(20), nullable=False)
+    @property
+    def temperature_health(self):
+        return "ok" if self.temperature_value is not None else "fault"
 
-    flame_detected = Column(Boolean, nullable=True)
-    flame_health = Column(String(20), nullable=False)
+    @property
+    def flame_health(self):
+        return "ok" if self.flame_detected is not None else "fault"
+
+    @property
+    def is_backfill(self):
+        return False

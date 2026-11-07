@@ -8,7 +8,7 @@ from app.core.config import settings
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
-    echo=settings.debug,
+    echo=settings.debug and settings.app_env.lower() not in ("production", "prod"),
 )
 
 

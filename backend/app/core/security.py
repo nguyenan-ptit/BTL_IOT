@@ -1,4 +1,3 @@
-
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -7,54 +6,40 @@ from pwdlib import PasswordHash
 from app.core.config import settings
 
 
-# Khởi tạo bộ băm mật khẩu Argon2
+ALGORITHM = "HS256"
 password_hash = PasswordHash.recommended()
 
 
 def hash_password(password: str) -> str:
-    """Băm mật khẩu trước khi lưu vào database."""
+    if len(password) < 8 or len(password) > 72:
+        raise ValueError("Password must contain between 8 and 72 characters")
     return password_hash.hash(password)
 
 
-def verify_password(
-    plain_password: str,
-    hashed_password: str,
-) -> bool:
-    """Kiểm tra mật khẩu người dùng nhập."""
-    return password_hash.verify(plain_password, hashed_password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    try:
+        return password_hash.verify(plain_password, hashed_password)
+    except (ValueError, TypeError):
+        return False
 
 
-def create_access_token(
-    user_id: int,
-    username: str,
-    role: str,
-) -> str:
-    """Tạo JWT access token."""
+def create_access_token(user_id: int, username: str, role: str) -> str:
     now = datetime.now(timezone.utc)
-
-    expire = now + timedelta(
-        minutes=settings.access_token_expire_minutes
-    )
-
     payload = {
         "sub": str(user_id),
+        "user_id": user_id,  # Compatibility with the existing device API verifier.
         "username": username,
         "role": role,
         "iat": now,
-        "exp": expire,
+        "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
     }
-
-    return jwt.encode(
-        payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
-    )
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict:
-    """Xác minh chữ ký và thời hạn JWT."""
     return jwt.decode(
         token,
         settings.jwt_secret_key,
-        algorithms=[settings.jwt_algorithm],
+        algorithms=[ALGORITHM],
+        options={"require": ["exp", "iat", "sub", "user_id", "role"]},
     )

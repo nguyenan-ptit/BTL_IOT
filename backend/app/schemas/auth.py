@@ -1,20 +1,26 @@
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=1, max_length=100)
-    password: str = Field(min_length=1, max_length=128)
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=32)
+    password: str = Field(min_length=1, max_length=72)
 
 
-class LoginUser(BaseModel):
-    id: int
-    username: str
-    display_name: str
-    role: str
+class ProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    displayName: str = Field(min_length=1, max_length=100)
+
+    @field_validator("displayName", mode="before")
+    @classmethod
+    def strip_display_name(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: LoginUser
+class ChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    currentPassword: str = Field(min_length=1, max_length=72)
+    newPassword: str = Field(min_length=8, max_length=72)

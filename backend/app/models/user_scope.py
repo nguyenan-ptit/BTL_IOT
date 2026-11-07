@@ -1,32 +1,15 @@
-
-from sqlalchemy import Column, BigInteger, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 
 from app.db.session import Base
 
 
 class UserScope(Base):
-    __tablename__ = "user_scopes"
+    """Time-bounded tenant-to-room occupancy from canonical ``room_users``."""
 
-    id = Column(
-        BigInteger,
-        primary_key=True,
-        autoincrement=True,
-    )
+    __tablename__ = "room_users"
 
-    user_id = Column(
-        BigInteger,
-        ForeignKey("users.id"),
-        nullable=False,
-    )
-
-    boarding_house_id = Column(
-        BigInteger,
-        ForeignKey("boarding_houses.id"),
-        nullable=True,
-    )
-
-    room_id = Column(
-        BigInteger,
-        ForeignKey("rooms.id"),
-        nullable=True,
-    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    room_id = Column(String(20), ForeignKey("rooms.room_id"), nullable=False)
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)

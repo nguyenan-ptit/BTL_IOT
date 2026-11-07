@@ -1,15 +1,14 @@
-from sqlalchemy import Column, BigInteger, String, Text, ForeignKey
+from sqlalchemy import Column, ForeignKey, Integer, String, Text
+
 from app.db.session import Base
 
 
 class BoardingHouse(Base):
-    __tablename__ = "boarding_houses"
+    """Application name mapped onto the canonical ``houses`` table."""
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False)
+    __tablename__ = "houses"
+
+    id = Column("house_id", Integer, primary_key=True, autoincrement=True)
+    landlord_id = Column("owner_id", Integer, ForeignKey("users.user_id"), nullable=False)
+    name = Column("house_name", String(100), nullable=False)
     address = Column(Text, nullable=True)
-    landlord_id = Column(
-        BigInteger,
-        ForeignKey("users.id"),
-        nullable=False,
-    )
