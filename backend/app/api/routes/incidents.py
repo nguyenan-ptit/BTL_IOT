@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -56,13 +57,21 @@ def _measurement_dict(row: Measurement | None):
     if row is None:
         return None
     received = row.received_at or row.measured_at
+    try:
+        payload = json.loads(row.raw_payload) if row.raw_payload else {}
+    except (TypeError, ValueError):
+        payload = {}
+    flame_data = payload.get("flame") if isinstance(payload, dict) and isinstance(payload.get("flame"), dict) else {}
+    gas_data = payload.get("mq2") if isinstance(payload, dict) and isinstance(payload.get("mq2"), dict) else {}
+    temperature_data = payload.get("temperature") if isinstance(payload, dict) and isinstance(payload.get("temperature"), dict) else {}
+    flame = flame_data.get("alarm") if flame_data.get("health") == "ok" and type(flame_data.get("alarm")) is bool else None
     return {
         "measuredAt": _iso(row.measured_at),
         "receivedAt": _iso(received),
         "isBackfill": False,
-        "gas": row.gas_value,
-        "temperature": row.temperature_value,
-        "flame": bool(row.flame_detected) if row.flame_detected is not None else None,
+        "gas": row.gas_value if gas_data.get("health") == "ok" else None,
+        "temperature": row.temperature_value if temperature_data.get("health") == "ok" else None,
+        "flame": flame,
     }
 
 
@@ -73,11 +82,15 @@ def _incident_public(db: Session, incident: Incident, viewer: User, *, detail=Fa
     ).filter(IncidentAcknowledgement.incident_id == incident.id,
              IncidentAcknowledgement.acknowledged_at.is_not(None)).order_by(
                  IncidentAcknowledgement.acknowledged_at.asc()).all()
-    history = db.query(Measurement).filter(
+    history_query = db.query(Measurement).filter(
         Measurement.node_id == incident.device_id,
         Measurement.room_id == incident.room_id,
         Measurement.measured_at >= incident.started_at,
-    ).order_by(Measurement.measured_at.asc(), Measurement.id.asc()).all()
+    )
+    incident_end = incident.recovered_at or incident.closed_at
+    if incident_end is not None:
+        history_query = history_query.filter(Measurement.measured_at <= incident_end)
+    history = history_query.order_by(Measurement.measured_at.asc(), Measurement.id.asc()).all()
     first = _measurement_dict(history[0] if history else None)
     latest = _measurement_dict(history[-1] if history else None)
     if first is None:
@@ -94,11 +107,12 @@ def _incident_public(db: Session, incident: Incident, viewer: User, *, detail=Fa
         acknowledgements.append({"user": {**actor_data, "role": actor.role}, "at": at})
         events.append({"at": at, "kind": "acknowledged", "measurement": None,
                        "actor": actor_data, "count": 1})
-    resolved_at = incident.closed_at or incident.recovered_at
+    resolved_at = incident.recovered_at or incident.closed_at
+    closer = db.query(User).filter(User.id == incident.closed_by).first() if incident.closed_by else None
+    closer_data = ({"id": str(closer.id), "displayName": closer.display_name or closer.username} if closer else None)
     if resolved_at:
-        actor = db.query(User).filter(User.id == incident.closed_by).first() if incident.closed_by else None
         events.append({"at": _iso(resolved_at), "kind": "resolved", "measurement": latest,
-                       "actor": ({"id": str(actor.id), "displayName": actor.display_name or actor.username} if actor else None),
+                       "actor": closer_data if incident.recovered_at is None else None,
                        "count": 1})
     events.sort(key=lambda event: event["at"])
     result = {
@@ -109,6 +123,9 @@ def _incident_public(db: Session, incident: Incident, viewer: User, *, detail=Fa
         "status": incident.status,
         "startedAt": _iso(incident.started_at),
         "resolvedAt": _iso(resolved_at),
+        "recoveredAt": _iso(incident.recovered_at),
+        "closedAt": _iso(incident.closed_at),
+        "closedBy": closer_data,
         "firstMeasurement": first,
         "latestMeasurement": latest,
         "acknowledgements": acknowledgements,

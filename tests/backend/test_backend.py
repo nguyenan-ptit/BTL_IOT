@@ -15,19 +15,28 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
-import app as application
-import auth
-import devices_api
-import emqx_admin
-import migrate
-import mqtt_lifecycle
-import storage
-from buzzer_control import BuzzerController
+import app.main as application
+import app.core.legacy_auth as auth
+import app.core.lifespan as app_lifespan
+import app.api.routes.devices as devices_api
+import app.api.routes.device_runtime as device_runtime
+import app.db.device_storage as storage
+import app.integrations.emqx.admin as emqx_admin
+import app.integrations.mqtt.buzzer_control as buzzer_control
+import app.integrations.mqtt.receiver as receiver
+import app.integrations.mqtt.remote_control as remote_control
+import app.services.mqtt_lifecycle as mqtt_lifecycle
+import app.services.telemetry_validation as telemetry_validation
+import scripts.migrate as migrate
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import jwt
-from remote_control import RemoteController, ThresholdUpdate
-from validation import validate_message
+
+BuzzerController = buzzer_control.BuzzerController
+Receiver = receiver.Receiver
+RemoteController = remote_control.RemoteController
+ThresholdUpdate = remote_control.ThresholdUpdate
+validate_message = telemetry_validation.validate_message
 
 SECRET = "isolated-test-secret-only-0123456789abcdef"
 ADMIN = {"user_id": 1001, "role": "admin"}
@@ -173,7 +182,7 @@ class BackendTests(unittest.TestCase):
     def setUp(self):
         self.db = self.database_factory()
         self.patches = [patch.object(module, "session", self.db.session)
-                        for module in (storage, application, devices_api, mqtt_lifecycle)]
+                        for module in (storage, devices_api, device_runtime, mqtt_lifecycle)]
         self.patches.append(patch.dict(os.environ, {"JWT_SECRET": SECRET}))
         for item in self.patches:
             item.start()
@@ -550,7 +559,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.client.patch("/api/devices/node01/room", headers=self.headers(OWNER), json={"room_id": "B"}).status_code, 403)
 
     def test_receiver_rejection_does_not_stop_other_nodes_and_duplicate_not_observed(self):
-        receiver = application.Receiver.__new__(application.Receiver)
+        receiver = Receiver.__new__(Receiver)
         receiver.lock = threading.Lock()
         receiver.status = {"accepted": 0, "rejected": 0, "duplicates": 0, "last_error": None}
         accepted = []
@@ -659,7 +668,7 @@ class AdapterAndTransactionTests(unittest.TestCase):
 
     def test_http_timeout_and_error_responses_do_not_expose_secrets(self):
         admin = emqx_admin.EmqxAdmin({"base_url": "https://broker.test/api/v5", "api_key": "secret-key", "api_secret": "secret-value"})
-        with patch("emqx_admin.requests.request", side_effect=emqx_admin.requests.Timeout("secret-value")):
+        with patch("app.integrations.emqx.admin.requests.request", side_effect=emqx_admin.requests.Timeout("secret-value")):
             with self.assertRaises(emqx_admin.AdminError) as caught:
                 admin.delete_user("node")
         self.assertNotIn("secret", str(caught.exception))

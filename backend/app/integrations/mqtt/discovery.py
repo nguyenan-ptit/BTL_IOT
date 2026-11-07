@@ -8,7 +8,7 @@ import socket
 import threading
 import time
 
-from prepare_discovery import KEY_FILE, read_discovery_key
+from app.integrations.mqtt.prepare_discovery import KEY_FILE, read_discovery_key
 
 DISCOVERY_PORT = 41884
 MAX_PACKET = 512

@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
-HERE = Path(__file__).resolve().parent
+# Keep settings.local.json, settings.example.json, and relative config paths at backend/.
+HERE = Path(__file__).resolve().parents[2]
 
 
 def legacy_credentials(path):

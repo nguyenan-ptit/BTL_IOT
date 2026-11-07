@@ -7,8 +7,8 @@ from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from auth import get_current_user, require_roles, verify_room_access
-from storage import allowed_device, audit, command_history, public_row, session
+from app.core.legacy_auth import get_current_user, require_roles, verify_room_access
+from app.db.device_storage import allowed_device, audit, command_history, public_row, session
 
 router = APIRouter(prefix="/api/devices", tags=["devices"])
 ID_PATTERN = r"^[A-Za-z0-9_-]{1,32}$"
@@ -206,7 +206,7 @@ def update_device_lifecycle(body: LifecycleRequest, request: Request,
     if body.credential_status == "revoked" or body.lifecycle_status == "decommissioned":
         if body.lifecycle_status not in (None, "blocked", "decommissioned"):
             raise HTTPException(409, "Thu hồi cần khóa hoặc ngừng sử dụng thiết bị.")
-        from mqtt_lifecycle import request_operation
+        from app.services.mqtt_lifecycle import request_operation
         return _operation_response(request_operation(
             request.app.state.emqx_admin, user, device_id, "revoke",
             retire=body.lifecycle_status == "decommissioned", note=body.maintenance_note))
@@ -253,7 +253,7 @@ def update_device_lifecycle(body: LifecycleRequest, request: Request,
 def mqtt_credentials(body: CredentialRequest, request: Request,
                      device_id: str = ApiPath(pattern=ID_PATTERN),
                      user: dict = Depends(require_roles("admin", "owner"))):
-    from mqtt_lifecycle import request_operation
+    from app.services.mqtt_lifecycle import request_operation
     password = body.password.get_secret_value() if body.password else None
     return _operation_response(request_operation(request.app.state.emqx_admin, user, device_id, body.action, password))
 
@@ -262,7 +262,7 @@ def mqtt_credentials(body: CredentialRequest, request: Request,
 def mqtt_operation(device_id: str = ApiPath(pattern=ID_PATTERN),
                    operation_id: str = ApiPath(pattern=r"^[0-9a-f]{32}$"),
                    user: dict = Depends(require_roles("admin", "owner"))):
-    from mqtt_lifecycle import get_operation
+    from app.services.mqtt_lifecycle import get_operation
     return get_operation(user, device_id, operation_id)
 
 
@@ -271,6 +271,6 @@ def retry_mqtt(body: RetryRequest, request: Request,
                device_id: str = ApiPath(pattern=ID_PATTERN),
                operation_id: str = ApiPath(pattern=r"^[0-9a-f]{32}$"),
                user: dict = Depends(require_roles("admin", "owner"))):
-    from mqtt_lifecycle import run_operation
+    from app.services.mqtt_lifecycle import run_operation
     password = body.password.get_secret_value() if body.password else None
     return _operation_response(run_operation(request.app.state.emqx_admin, user, device_id, operation_id, password))

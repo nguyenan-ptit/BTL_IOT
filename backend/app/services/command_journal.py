@@ -4,7 +4,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
-import storage
+from app.db import device_storage as storage
 
 
 class JournalController:

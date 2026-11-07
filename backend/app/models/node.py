@@ -35,4 +35,4 @@ class Node(Base):
             return "offline"
         from datetime import datetime, timezone
         last_seen = self.last_seen_at.replace(tzinfo=timezone.utc) if self.last_seen_at.tzinfo is None else self.last_seen_at
-        return "online" if (datetime.now(timezone.utc) - last_seen).total_seconds() <= 30 else "offline"
+        return "online" if (datetime.now(timezone.utc) - last_seen).total_seconds() <= 20 else "offline"

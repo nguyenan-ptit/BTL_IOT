@@ -9,7 +9,7 @@ from decimal import Decimal
 import paho.mqtt.client as mqtt
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
-from command_journal import JournalController
+from app.services.command_journal import JournalController
 
 COMMAND_TIMEOUT_SECONDS = 20
 

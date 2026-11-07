@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -18,6 +19,22 @@ from app.models.user_scope import UserScope
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 houses_router = APIRouter(prefix="/api/boarding-houses", tags=["Rooms"])
 HAZARDS = {"gas", "high_temperature", "flame"}
+
+
+def _payload(measurement: Measurement | None) -> dict:
+    if measurement is None or not measurement.raw_payload:
+        return {}
+    try:
+        value = json.loads(measurement.raw_payload)
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _health(payload: dict, key: str, fallback: str) -> str:
+    sensor = payload.get(key)
+    health = sensor.get("health") if isinstance(sensor, dict) else None
+    return "ok" if health == "ok" else "fault" if health else fallback
 
 
 def _iso(value):
@@ -92,13 +109,16 @@ def get_room_statuses(
                 Measurement.node_id == node.id,
                 Measurement.room_id == room.id,
             ).order_by(Measurement.measured_at.desc(), Measurement.id.desc()).first()
+        payload = _payload(measurement)
+        flame_data = payload.get("flame") if isinstance(payload.get("flame"), dict) else {}
+        flame_health = _health(payload, "flame", "fault")
         sensors = [
-            {"kind": "gas", "health": measurement.gas_health if measurement else "fault",
-             "value": measurement.gas_value if measurement else None},
-            {"kind": "temperature", "health": measurement.temperature_health if measurement else "fault",
-             "value": measurement.temperature_value if measurement else None},
-            {"kind": "flame", "health": measurement.flame_health if measurement else "fault",
-             "value": bool(measurement.flame_detected) if measurement and measurement.flame_detected is not None else None},
+            {"kind": "gas", "health": _health(payload, "mq2", "fault"),
+             "value": measurement.gas_value if measurement and _health(payload, "mq2", "fault") == "ok" else None},
+            {"kind": "temperature", "health": _health(payload, "temperature", "fault"),
+             "value": measurement.temperature_value if measurement and _health(payload, "temperature", "fault") == "ok" else None},
+            {"kind": "flame", "health": flame_health,
+             "value": flame_data.get("alarm") if flame_health == "ok" and type(flame_data.get("alarm")) is bool else None},
         ]
         incident = db.query(Incident).filter(
             Incident.room_id == room.id,
@@ -157,6 +177,9 @@ def get_room_detail(
     measurement = db.query(Measurement).filter(
         Measurement.node_id == node.id, Measurement.room_id == room.id
     ).order_by(Measurement.measured_at.desc()).first() if node else None
+    payload = _payload(measurement)
+    flame_data = payload.get("flame") if isinstance(payload.get("flame"), dict) else {}
+    flame_health = _health(payload, "flame", "fault")
     return {
         "room_id": room.id,
         "room_name": room.name,
@@ -166,11 +189,11 @@ def get_room_detail(
             "connectivity": node.connectivity,
             "last_seen_at": _iso(node.last_seen_at),
             "latest_measurement": ({"measured_at": measurement.measured_at.isoformat(),
-                                    "gas_value": measurement.gas_value,
-                                    "gas_health": measurement.gas_health,
-                                    "temperature_value": measurement.temperature_value,
-                                    "temperature_health": measurement.temperature_health,
-                                    "flame_detected": bool(measurement.flame_detected) if measurement.flame_detected is not None else None,
-                                    "flame_health": measurement.flame_health} if measurement else None),
+                                    "gas_value": measurement.gas_value if _health(payload, "mq2", "fault") == "ok" else None,
+                                    "gas_health": _health(payload, "mq2", "fault"),
+                                    "temperature_value": measurement.temperature_value if _health(payload, "temperature", "fault") == "ok" else None,
+                                    "temperature_health": _health(payload, "temperature", "fault"),
+                                    "flame_detected": flame_data.get("alarm") if flame_health == "ok" and type(flame_data.get("alarm")) is bool else None,
+                                    "flame_health": flame_health} if measurement else None),
         }],
     }

@@ -27,7 +27,7 @@ Thông tin Cloud và settings.local.json không nằm trong Git. Người nhận
 - **Long:** cấu hình/kiểm chứng API quản trị broker tương thích, topic ACL và tài khoản riêng từng node; hoàn tất cấp/thu hồi/cấp lại trên broker thật. Deployment hiện tại chưa hỗ trợ adapter này: API báo incomplete và node vẫn bị chặn tại BE. Không tính thao tác xóa tài khoản thủ công là thu hồi tự động đã hoàn tất.
 - **Vĩ:** dịch vụ đăng ký/đăng nhập người dùng, băm mật khẩu, JWT, trạng thái và vai trò tài khoản. BE của Long không có API tự đăng ký/đăng nhập; các user test có hash giả không thay thế dịch vụ này.
 - **Long + Vĩ:** thống nhất users, houses.owner_id, room_users và các claim JWT user_id (int), role, exp; cùng khóa ký HS256. BE kiểm tra lại status/role/phạm vi DB. Khóa trao đổi riêng qua cấu hình runtime.
-- **Nguyên + Long/Vĩ:** đối chiếu hợp đồng frontend mock (/api/nodes, /api/auth/*) với LONG_API và dịch vụ tài khoản, tích hợp response/token/mã lỗi rồi mới tắt mock. Trang backend/index.html là trang thử API riêng.
+- **Nguyên + Long/Vĩ:** đối chiếu hợp đồng frontend mock (/api/nodes, /api/auth/*) với LONG_API và dịch vụ tài khoản, tích hợp response/token/mã lỗi rồi mới tắt mock. Trang backend/app/static/dashboard.html là trang thử API riêng.
 - **An + Long:** đối chiếu MQTT username thực tế từng ESP với registry và policy; nạp username/mật khẩu mới khi cấp/cấp lại. Nghiệm thu ngưỡng, ACK, đầu ra vật lý và mất mạng/phục hồi theo từng node.
 - **Nhóm:** triển khai BE, MySQL, broker, dịch vụ tài khoản và web với địa chỉ/HTTPS thống nhất. Hiện cấu hình chạy local 127.0.0.1:8000 chưa phải dịch vụ để thành viên khác truy cập.
 

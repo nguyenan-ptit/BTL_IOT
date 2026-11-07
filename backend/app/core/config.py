@@ -47,7 +47,7 @@ class Settings(BaseSettings):
             return self
         if not self.mysql_password:
             raise ValueError("Set DATABASE_URL or IOT_MYSQL_PASSWORD")
-        self.database_url = str(URL.create(
+        self.database_url = URL.create(
             "mysql+pymysql",
             username=self.mysql_user,
             password=self.mysql_password,
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
             port=self.mysql_port,
             database=self.mysql_database,
             query={"charset": "utf8mb4"},
-        ))
+        ).render_as_string(hide_password=False)
         return self
 
 

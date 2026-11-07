@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, Text
 
 from app.db.session import Base
 
@@ -16,6 +16,7 @@ class Measurement(Base):
     gas_value = Column("mq2_adc", Integer, nullable=True)
     temperature_value = Column("temperature_c", Float, nullable=True)
     flame_detected = Column("flame_do", Integer, nullable=True)
+    raw_payload = Column(Text, nullable=True)
 
     @property
     def gas_health(self):

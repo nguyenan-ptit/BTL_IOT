@@ -127,7 +127,7 @@ Nếu dùng PowerShell: đặt `$env:JWT_SECRET = '<khoa-rieng>'` thay cho lện
 ## 6. Chạy server và gọi API
 
 ```bat
-.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 Đợi Application startup complete. Chỉ chạy một BE/worker trên mỗi DB. Nhấn Ctrl+C để dừng; sau khi sửa source phải dừng rồi chạy lại để nạp code.

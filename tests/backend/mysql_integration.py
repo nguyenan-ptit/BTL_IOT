@@ -16,9 +16,9 @@ import uuid
 from unittest.mock import patch
 
 import test_backend as isolated
-import migrate
 import pymysql
-import storage
+import scripts.migrate as migrate
+import app.db.device_storage as storage
 
 ROOT = isolated.ROOT
 DATA = (ROOT / "test-output/mysql-long-review/data").resolve()
@@ -213,10 +213,10 @@ class MigrationTests(unittest.TestCase):
             ticked.set()
 
         with patch.dict(isolated.os.environ, {"JWT_SECRET": isolated.SECRET}), \
-             patch.object(isolated.application, "load_settings", return_value=config), \
-             patch.object(isolated.application, "Receiver", return_value=receiver), \
-             patch.object(isolated.application, "DiscoveryResponder", return_value=discovery), \
-             patch.object(isolated.application, "expire_commands", side_effect=observed_expiry):
+             patch.object(isolated.app_lifespan, "load_settings", return_value=config), \
+             patch.object(isolated.app_lifespan, "Receiver", return_value=receiver), \
+             patch.object(isolated.app_lifespan, "DiscoveryResponder", return_value=discovery), \
+             patch.object(isolated.app_lifespan, "expire_commands", side_effect=observed_expiry):
             with isolated.TestClient(isolated.application.app) as client:
                 self.assertEqual(client.get("/api/health").status_code, 200)
                 self.assertTrue(isolated.application.app.state.command_worker_ready)

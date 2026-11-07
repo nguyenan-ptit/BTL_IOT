@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from sqlalchemy.orm import Session
@@ -8,7 +8,6 @@ from app.db.session import get_db
 from app.models.user import User
 
 
-SESSION_COOKIE = "btl_access"
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -21,13 +20,10 @@ def unauthenticated() -> HTTPException:
 
 
 def get_current_user(
-    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    token = request.cookies.get(SESSION_COOKIE)
-    if not token and credentials is not None:
-        token = credentials.credentials
+    token = credentials.credentials if credentials is not None else None
     if not token:
         raise unauthenticated()
 

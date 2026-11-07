@@ -9,8 +9,8 @@ import paho.mqtt.client as mqtt
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from remote_control import COMMAND_TIMEOUT_SECONDS
-from command_journal import JournalController
+from app.integrations.mqtt.remote_control import COMMAND_TIMEOUT_SECONDS
+from app.services.command_journal import JournalController
 
 
 class BuzzerTestUpdate(BaseModel):

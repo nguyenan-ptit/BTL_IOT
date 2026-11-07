@@ -10,11 +10,20 @@ from app.models.user import User
 
 
 router = APIRouter(prefix="/api/audit-logs", tags=["Audit Logs"])
-FRONTEND_ACTIONS = {
-    "user_created", "user_updated", "user_locked", "user_unlocked",
-    "node_registered", "node_assigned", "node_transitioned",
-    "incident_acknowledged", "threshold_updated",
+ACTION_ALIASES = {
+    "user_created": {"user_created"},
+    "user_updated": {"user_updated"},
+    "user_locked": {"user_locked"},
+    "user_unlocked": {"user_unlocked"},
+    "node_registered": {"node_registered", "REGISTER_DEVICE"},
+    "node_assigned": {"node_assigned", "MOVE_DEVICE"},
+    "node_transitioned": {"node_transitioned", "UPDATE_LIFECYCLE"},
+    "incident_acknowledged": {"incident_acknowledged"},
+    "threshold_updated": {"threshold_updated"},
 }
+FRONTEND_ACTIONS = set(ACTION_ALIASES)
+RAW_ACTIONS = set().union(*ACTION_ALIASES.values())
+RAW_TO_FRONTEND_ACTION = {raw: public for public, aliases in ACTION_ALIASES.items() for raw in aliases}
 
 
 def _parse_time(value: str | None):
@@ -42,10 +51,12 @@ def get_audit_logs(
         raise HTTPException(403, {"code": "FORBIDDEN", "message": "Bạn không có quyền xem nhật ký."})
     query = db.query(AuditLog, User).join(User, User.id == AuditLog.actor_user_id).filter(
         AuditLog.result == "success",
-        AuditLog.action.in_(FRONTEND_ACTIONS),
+        AuditLog.action.in_(RAW_ACTIONS),
     )
     if action:
-        query = query.filter(AuditLog.action.in_(set(action) & FRONTEND_ACTIONS))
+        requested = set(action) & FRONTEND_ACTIONS
+        raw_actions = set().union(*(ACTION_ALIASES[key] for key in requested)) if requested else set()
+        query = query.filter(AuditLog.action.in_(raw_actions)) if raw_actions else query.filter(False)
     start, end = _parse_time(from_), _parse_time(to)
     if start:
         query = query.filter(AuditLog.created_at >= start)
@@ -61,9 +72,9 @@ def get_audit_logs(
             "id": str(log.id),
             "at": at.isoformat(),
             "actor": {"id": str(actor.id), "displayName": actor.display_name or actor.username},
-            "action": log.action,
+            "action": RAW_TO_FRONTEND_ACTION.get(log.action, log.action),
             "target": {
-                "type": log.target_type if log.target_type in ("user", "node", "incident", "room") else "user",
+                "type": "node" if log.target_type == "device" else log.target_type if log.target_type in ("user", "node", "incident", "room") else "user",
                 "id": str(log.target_id),
                 "label": details.get("label") or details.get("summary") or f"{log.target_type} {log.target_id}",
             },

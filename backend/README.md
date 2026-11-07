@@ -21,12 +21,12 @@ JWT_SECRET phải trùng với dịch vụ tài khoản của người 3, ít nh
 Tạo database mới hoặc chạy migration theo [database/README](../database/README.md), sau đó:
 
 ~~~powershell
-.venv/Scripts/python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+.venv/Scripts/python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ~~~
 
 Mỗi database chỉ cho phép một backend; khóa MySQL ngăn worker thứ hai và migration chạy khi backend còn hoạt động. Worker giữ khóa sống trong suốt phiên. Nếu mất kết nối giữ khóa, backend dừng nhận MQTT và từ chối điều khiển cho đến khi khởi động lại. Khi triển khai ra mạng cần reverse proxy HTTPS.
 
-Dashboard thử tại http://127.0.0.1:8000/ nhận mã truy cập từ dịch vụ tài khoản. Mã chỉ giữ trong bộ nhớ trang, bị xóa khi đóng phiên/tải lại. Đây là màn thử API, không thay thế giao diện đăng nhập của người 4. OpenAPI ở /docs.
+Dashboard thử tại http://127.0.0.1:8000/ hoặc /dashboard nhận mã truy cập từ dịch vụ tài khoản. Mã chỉ giữ trong bộ nhớ trang, bị xóa khi đóng phiên/tải lại. Đây là màn thử API, không thay thế giao diện đăng nhập của người 4. OpenAPI ở /docs.
 
 ## Cấu hình
 
@@ -61,7 +61,7 @@ Bộ mặc định chạy API thật trong tiến trình với adapter SQLite v�
 
 [mysql_integration.py](../tests/backend/mysql_integration.py) chạy lại API và migration trên MySQL tạm riêng ở 127.0.0.1:13317. Script kiểm tra datadir trước mọi thao tác tạo DB và không chạm dịch vụ MySQL đang dùng. Cách chạy và bằng chứng ở [trạng thái triển khai](../docs/LONG_IMPLEMENTATION_STATUS.md).
 
-test_devices.py là smoke test có thay đổi dữ liệu, chỉ chạy trên DB thử. Cấp ba token từ luồng đăng nhập thật qua IOT_TEST_ADMIN_TOKEN, IOT_TEST_OWNER_TOKEN, IOT_TEST_TENANT_TOKEN. Script không tự ký token và không đọc JWT_SECRET. Dữ liệu mẫu dùng ID 1001/1002/1003 nhưng tài khoản mặc định locked, hash giả; cần người 3 chuẩn bị tài khoản đăng nhập thật trước.
+scripts/test_devices.py là smoke test có thay đổi dữ liệu, chỉ chạy trên DB thử. Cấp ba token từ luồng đăng nhập thật qua IOT_TEST_ADMIN_TOKEN, IOT_TEST_OWNER_TOKEN, IOT_TEST_TENANT_TOKEN. Script không tự ký token và không đọc JWT_SECRET. Dữ liệu mẫu dùng ID 1001/1002/1003 nhưng tài khoản mặc định locked, hash giả; cần người 3 chuẩn bị tài khoản đăng nhập thật trước.
 
 ## Phối hợp còn cần
 
