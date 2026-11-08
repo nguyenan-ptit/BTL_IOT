@@ -9,6 +9,7 @@ import { cn } from '@/shared/ui/cn'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { Sheet } from '@/shared/ui/Sheet'
 import { AcknowledgeButton } from '../components/AcknowledgeButton'
+import { ResolveButton } from '../components/ResolveButton'
 import { IncidentStatusPill } from '../components/IncidentStatusPill'
 import { Stamps } from '../components/Stamps'
 import { measurementText, signsText } from '../format'
@@ -176,6 +177,12 @@ export default function IncidentDetailPage() {
                     className="w-full"
                     onAcknowledged={() => setFresh(true)}
                   />
+                  <ResolveButton incident={data} />
+                  {data.closedBy && (
+                    <p className="text-sm text-ink-soft">
+                      Đã đóng bởi {data.closedBy.displayName}.
+                    </p>
+                  )}
                 </Sheet>
               </aside>
             </div>

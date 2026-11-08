@@ -7,6 +7,7 @@ import {
   fetchIncident,
   fetchIncidents,
   incidentKeys,
+  resolveIncident,
   type IncidentFilters,
 } from './api'
 
@@ -41,6 +42,17 @@ export function useAcknowledge() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: acknowledgeIncident,
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: incidentKeys.all })
+      void queryClient.invalidateQueries({ queryKey: roomKeys.all })
+    },
+  })
+}
+
+export function useResolveIncident() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: resolveIncident,
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: incidentKeys.all })
       void queryClient.invalidateQueries({ queryKey: roomKeys.all })

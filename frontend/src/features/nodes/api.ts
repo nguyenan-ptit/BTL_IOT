@@ -1,48 +1,52 @@
 import { z } from 'zod'
+import { deviceLifecycleSchema, type DeviceLifecycle } from '@/features/devices/schemas'
 import { request } from '@/shared/api/http'
-import { pageSchema, type NodeLifecycle } from '@/shared/schemas/common'
-import { nodeHistoryEntrySchema, nodeListItemSchema, nodeSchema, type NodeAction } from './schemas'
-
-export const nodeKeys = {
-  all: ['nodes'] as const,
-  list: (lifecycle: NodeLifecycle[], page: number) => ['nodes', 'list', lifecycle, page] as const,
-  detail: (id: string) => ['nodes', 'detail', id] as const,
-  history: (id: string) => ['nodes', 'history', id] as const,
-}
+import { mqttOperationSchema } from './mqtt'
+import { nodeCommandSchema, type RegisterNodeBody } from './schemas'
 
 export const NODE_PAGE_SIZE = 20
 
-export function fetchNodes(lifecycle: NodeLifecycle[], page: number, signal?: AbortSignal) {
-  return request('/api/nodes', pageSchema(nodeListItemSchema), {
-    query: { lifecycle, page, pageSize: NODE_PAGE_SIZE },
-    signal,
-  })
-}
+const base = (id: string) => `/api/devices/${encodeURIComponent(id)}`
 
-export function fetchNode(id: string, signal?: AbortSignal) {
-  return request(`/api/nodes/${encodeURIComponent(id)}`, nodeListItemSchema, { signal })
-}
-
-export function fetchNodeHistory(id: string, signal?: AbortSignal) {
-  return request(`/api/nodes/${encodeURIComponent(id)}/history`, z.array(nodeHistoryEntrySchema), {
-    signal,
-  })
-}
-
-export function registerNode(body: { code: string; roomId: string | null }) {
-  return request('/api/nodes', nodeSchema, { method: 'POST', body })
-}
-
-export function assignNode(id: string, roomId: string | null) {
-  return request(`/api/nodes/${encodeURIComponent(id)}`, nodeSchema, {
-    method: 'PATCH',
-    body: { roomId },
-  })
-}
-
-export function transitionNode(id: string, action: NodeAction) {
-  return request(`/api/nodes/${encodeURIComponent(id)}/transitions`, nodeSchema, {
+export function registerNode(body: RegisterNodeBody) {
+  return request('/api/devices/register', z.looseObject({ device_id: z.string() }), {
     method: 'POST',
-    body: { action },
+    body,
   })
+}
+
+/** Backend bắt buộc có phòng; không có "bỏ gán". */
+export function moveNode(id: string, roomId: string) {
+  return request(`${base(id)}/room`, z.looseObject({}), {
+    method: 'PATCH',
+    body: { room_id: roomId },
+  })
+}
+
+const lifecycleResultSchema = z.looseObject({
+  device_id: z.string(),
+  lifecycle_status: deviceLifecycleSchema,
+})
+
+/**
+ * Đổi vòng đời. Ngừng sử dụng chạy luồng thu hồi MQTT và trả về thao tác MQTT
+ * (`202 + incomplete` khi EMQX chưa xong), không phải kết quả vòng đời.
+ */
+export function changeLifecycle(
+  id: string,
+  body: { lifecycle_status: DeviceLifecycle; maintenance_note?: string },
+) {
+  return request(`${base(id)}/lifecycle`, z.union([lifecycleResultSchema, mqttOperationSchema]), {
+    method: 'PATCH',
+    body,
+  })
+}
+
+export async function fetchNodeCommands(id: string, signal?: AbortSignal) {
+  const result = await request(
+    `${base(id)}/commands`,
+    z.object({ items: z.array(nodeCommandSchema) }),
+    { query: { limit: 20 }, signal },
+  )
+  return result.items
 }

@@ -8,19 +8,11 @@ import { Field, TextInput } from '@/shared/ui/Field'
 import { useCurrentUser, useLogin } from '../hooks'
 import { loginFormSchema, type LoginForm } from '../schemas'
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
-// Tên đăng nhập mẫu của dữ liệu giả lập (mocks/seed.ts). Không hiện khi nối backend thật.
-const DEMO_USERS = [
-  { username: 'chutro', label: 'Chủ trọ' },
-  { username: 'thue101', label: 'Người thuê 101' },
-  { username: 'thue102', label: 'Người thuê 102' },
-  { username: 'admin', label: 'Quản trị viên' },
-]
-
 function loginErrorMessage(error: unknown): string {
   if (isApiError(error, 'ACCOUNT_LOCKED'))
     return 'Tài khoản đã bị khóa. Liên hệ quản trị viên để mở lại.'
   if (isApiError(error, 'INVALID_CREDENTIALS')) return 'Tên đăng nhập hoặc mật khẩu không đúng.'
+  if (isApiError(error)) return error.message
   return 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.'
 }
 
@@ -33,8 +25,6 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    setValue,
-    setFocus,
     formState: { errors },
   } = useForm<LoginForm>({ resolver: zodResolver(loginFormSchema) })
 
@@ -95,27 +85,6 @@ export default function LoginPage() {
             {login.isPending ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </Button>
         </form>
-
-        {USE_MOCK && (
-          <div className="mt-6 text-sm text-board-100">
-            <p className="mb-2">Dữ liệu giả lập. Chọn nhanh tài khoản mẫu:</p>
-            <div className="flex flex-wrap gap-2">
-              {DEMO_USERS.map((demo) => (
-                <button
-                  key={demo.username}
-                  type="button"
-                  onClick={() => {
-                    setValue('username', demo.username)
-                    setFocus('password')
-                  }}
-                  className="rounded-full px-3 py-1.5 font-semibold text-white ring-1 ring-board-200/40 ring-inset hover:bg-board-800"
-                >
-                  {demo.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

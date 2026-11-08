@@ -47,3 +47,12 @@ export function acknowledgeIncident(id: string) {
     method: 'POST',
   })
 }
+
+/** Đóng sự cố đã khôi phục. Response chỉ có trạng thái; giao diện tải lại sự cố sau đó. */
+export function resolveIncident(id: string) {
+  return request(
+    `/api/incidents/${encodeURIComponent(id)}/resolve`,
+    z.looseObject({ incident_id: z.number(), status: z.string() }),
+    { method: 'POST' },
+  )
+}

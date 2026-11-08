@@ -3,7 +3,6 @@ import type {
   Connectivity,
   HazardSign,
   IncidentStatus,
-  NodeLifecycle,
   Role,
   RoomOverall,
   SensorHealth,
@@ -14,13 +13,6 @@ export const roleLabel: Record<Role, string> = {
   admin: 'Quản trị viên',
   landlord: 'Chủ trọ',
   tenant: 'Người thuê',
-}
-
-export const nodeLifecycleLabel: Record<NodeLifecycle, string> = {
-  registered: 'Đã đăng ký',
-  active: 'Đang sử dụng',
-  maintenance: 'Bảo trì',
-  retired: 'Ngừng sử dụng',
 }
 
 export const connectivityLabel: Record<Connectivity, string> = {

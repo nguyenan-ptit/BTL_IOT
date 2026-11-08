@@ -1,49 +1,50 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { z } from 'zod'
-import { request } from '@/shared/api/http'
-import { roomThresholdSchema, thresholdValuesSchema, type ThresholdValues } from './schemas'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toThresholdPayload } from '@/features/devices/adapters'
+import { deviceKeys } from '@/features/devices/api'
+import {
+  buzzerCommandSchema,
+  thresholdCommandSchema,
+  type Telemetry,
+} from '@/features/devices/schemas'
+import { CONTROL_HEADERS, request } from '@/shared/api/http'
+import type { ThresholdValues } from './schemas'
 
-export const thresholdKeys = {
-  all: ['thresholds'] as const,
-  list: ['thresholds', 'list'] as const,
-  defaults: ['thresholds', 'defaults'] as const,
+function devicePath(id: string, action: string) {
+  return `/api/devices/${encodeURIComponent(id)}/${action}`
 }
 
-export function useThresholds(enabled = true) {
-  return useQuery({
-    queryKey: thresholdKeys.list,
-    queryFn: ({ signal }) => request('/api/thresholds', z.array(roomThresholdSchema), { signal }),
-    // Hỏi lại để thấy trạng thái đồng bộ đổi từ "Chờ node áp dụng" sang "Đang áp dụng".
-    refetchInterval: 3_000,
-    enabled,
-  })
-}
-
-export function useDefaultThresholds() {
-  return useQuery({
-    queryKey: thresholdKeys.defaults,
-    queryFn: ({ signal }) => request('/api/thresholds/defaults', thresholdValuesSchema, { signal }),
-    staleTime: Infinity,
-  })
-}
-
-export function useSaveThresholds() {
+/** Gửi ngưỡng mới cho node. Giá trị expected lấy từ telemetry mới nhất, backend dùng để chống lệnh cũ. */
+export function useSendThresholds() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: { roomIds: string[]; values: ThresholdValues }) =>
-      request('/api/thresholds', z.array(roomThresholdSchema), { method: 'PUT', body }),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: thresholdKeys.all }),
-  })
-}
-
-export function useResetThresholds() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (roomIds: string[]) =>
-      request('/api/thresholds/reset', z.array(roomThresholdSchema), {
+    mutationFn: (v: { deviceId: string; data: Telemetry; values: ThresholdValues }) =>
+      request(devicePath(v.deviceId, 'thresholds'), thresholdCommandSchema, {
         method: 'POST',
-        body: { roomIds },
+        headers: CONTROL_HEADERS,
+        body: {
+          expected_boot_id: v.data.boot_id,
+          expected_revision: v.data.remote_config?.revision ?? 0,
+          thresholds: toThresholdPayload(v.values),
+        },
       }),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: thresholdKeys.all }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: deviceKeys.all }),
+  })
+}
+
+/** Bắt đầu/dừng lượt thử còi và đèn khoảng 3 giây. Dừng không tắt cảnh báo thật. */
+export function useBuzzerTest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { deviceId: string; data: Telemetry; action: 'start' | 'stop' }) =>
+      request(devicePath(v.deviceId, 'buzzer-test'), buzzerCommandSchema, {
+        method: 'POST',
+        headers: CONTROL_HEADERS,
+        body: {
+          expected_boot_id: v.data.boot_id,
+          expected_seq: v.data.buzzer_test?.command_seq ?? 0,
+          action: v.action,
+        },
+      }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: deviceKeys.all }),
   })
 }
