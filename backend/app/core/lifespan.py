@@ -23,7 +23,7 @@ async def lifespan(app):
         raise ValueError("Cần JWT_SECRET ít nhất 32 ký tự từ dịch vụ tài khoản")
     # The legacy device API verifier reads this environment variable directly.
     os.environ["JWT_SECRET"] = settings.jwt_secret_key
-    configure_storage(config["mysql"])
+    configure_storage(settings.mysql_config)
     with backend_guard() as guard:
         initialize()
         recover_commands()

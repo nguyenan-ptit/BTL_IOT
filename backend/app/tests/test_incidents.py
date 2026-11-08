@@ -7,7 +7,7 @@ import pytest
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BACKEND_DIR))
-os.environ.setdefault("DATABASE_URL", "sqlite://")
+os.environ.setdefault("IOT_MYSQL_PASSWORD", "test-only-password")
 if len(os.environ.get("JWT_SECRET", "")) < 32:
     os.environ["JWT_SECRET"] = "test-only-secret-0123456789abcdef"
 
