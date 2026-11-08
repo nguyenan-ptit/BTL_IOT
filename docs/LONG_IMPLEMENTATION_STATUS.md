@@ -47,7 +47,7 @@ Instance MySQL test riêng dùng cổng 13317 và datadir dưới test-output, d
 
 ## Việc cần cung cấp để chạy hệ thống nhóm
 
-1. Điền kết nối MySQL/MQTT thật trong backend/settings.local.json hoặc IOT_MYSQL_*/IOT_MQTT_*; giữ mật khẩu ngoài Git. Sao lưu DB, dừng backend, chạy migrate.py --check rồi --apply.
+1. Điền kết nối MySQL trong .env bằng IOT_MYSQL_* và MQTT thật trong backend/settings.local.json hoặc IOT_MQTT_*; giữ mật khẩu ngoài Git. Sao lưu DB, dừng backend, chạy migrate.py --check rồi --apply.
 2. Người 3 cung cấp dịch vụ đăng nhập/token và JWT_SECRET dùng chung. Token cần user_id, role admin/owner/tenant và exp; user trong DB phải active. Dữ liệu mẫu locked/hash giả không dùng để đăng nhập thật.
 3. Xác định deployment EMQX và URL quản trị; cấu hình khóa API ở local/env. Đối chiếu policy và các username cũ trước khi bật policy_verified. Không gửi khóa vào chat hoặc đưa vào firmware/frontend.
 4. Chạy capabilities và nghiệm thu node thử trên deployment: tạo tài khoản, topic ACL, thu hồi/ngắt phiên, thử kết nối lại bằng thông tin cũ, lỗi và retry. Nếu Serverless thiếu API cần thiết, chức năng tự động giữ trạng thái chưa hoàn tất; nhóm cần chọn cách xử lý theo [LONG_API](LONG_API.md).

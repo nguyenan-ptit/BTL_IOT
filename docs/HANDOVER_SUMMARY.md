@@ -16,7 +16,7 @@ Chưa hoàn tất: tự động cấp/thu hồi/cấp lại tài khoản MQTT tr
 Cách chạy: từ gốc repo tạo .venv, cài backend/requirements.txt, tạo settings.local.json, khởi tạo MySQL hoặc migration, đặt JWT_SECRET cùng dịch vụ tài khoản, rồi chạy một worker:
 
 ```bat
-.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 Swagger: http://127.0.0.1:8000/docs. API dữ liệu/quản lý cần Bearer JWT của user active trong SQL; /api/health công khai. File .env không được tự nạp. Các file cấu hình, mật khẩu, CA cục bộ và DB test không có trong Git; máy nhận tự cấu hình, không phụ thuộc đường dẫn/cổng của máy bàn giao.

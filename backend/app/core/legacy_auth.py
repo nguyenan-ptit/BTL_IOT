@@ -25,7 +25,7 @@ def get_current_user(creds: HTTPAuthorizationCredentials | None = Depends(_beare
         raise HTTPException(401, "Token không hợp lệ hoặc đã hết hạn") from None
     if type(payload["user_id"]) is not int or payload["user_id"] <= 0:
         raise HTTPException(401, "Token có user_id không hợp lệ")
-    from storage import session
+    from app.db.device_storage import session
     with session() as cursor:
         cursor.execute("SELECT user_id, role, status FROM users WHERE user_id = %s", (payload["user_id"],))
         account = cursor.fetchone()

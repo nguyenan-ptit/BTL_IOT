@@ -12,28 +12,29 @@ Chạy từ thư mục gốc repository:
 py -m venv .venv
 .venv/Scripts/python.exe -m pip install -r backend/requirements.txt
 Copy-Item backend/settings.example.json backend/settings.local.json
+Copy-Item .env.example .env
 ~~~
 
-Điền cấu hình MySQL/MQTT trong settings.local.json hoặc biến môi trường theo [.env.example](../.env.example). Backend đọc biến môi trường của tiến trình, không tự nạp file .env. Không commit file local, mật khẩu, CA riêng hoặc khóa.
+Điền MySQL và JWT trong `.env`; cấu hình MQTT/EMQX trong settings.local.json hoặc biến môi trường. Không commit file local, mật khẩu, CA riêng hoặc khóa.
 
 JWT_SECRET phải trùng với dịch vụ tài khoản của người 3, ít nhất 32 ký tự. Token phải có user_id kiểu số nguyên, role và exp. Mỗi request được kiểm tra lại tài khoản đang active và role hiện tại trong MySQL; token của tài khoản locked bị từ chối. Không có khóa JWT mặc định và backend này không tự xây lại luồng đăng nhập.
 
 Tạo database mới hoặc chạy migration theo [database/README](../database/README.md), sau đó:
 
 ~~~powershell
-.venv/Scripts/python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+.venv/Scripts/python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ~~~
 
 Mỗi database chỉ cho phép một backend; khóa MySQL ngăn worker thứ hai và migration chạy khi backend còn hoạt động. Worker giữ khóa sống trong suốt phiên. Nếu mất kết nối giữ khóa, backend dừng nhận MQTT và từ chối điều khiển cho đến khi khởi động lại. Khi triển khai ra mạng cần reverse proxy HTTPS.
 
-Dashboard thử tại http://127.0.0.1:8000/ nhận mã truy cập từ dịch vụ tài khoản. Mã chỉ giữ trong bộ nhớ trang, bị xóa khi đóng phiên/tải lại. Đây là màn thử API, không thay thế giao diện đăng nhập của người 4. OpenAPI ở /docs.
+Dashboard thử tại http://127.0.0.1:8000/ hoặc /dashboard nhận mã truy cập từ dịch vụ tài khoản. Mã chỉ giữ trong bộ nhớ trang, bị xóa khi đóng phiên/tải lại. Đây là màn thử API, không thay thế giao diện đăng nhập của người 4. OpenAPI ở /docs.
 
 ## Cấu hình
 
-- MQTT backend: mqtt_host, mqtt_port, mqtt_username, mqtt_password; topic phải là iot/devices/+/telemetry.
+- MQTT backend: mqtt_host, mqtt_port, TLS và topic trong settings.local.json; username/password qua IOT_MQTT_USERNAME và IOT_MQTT_PASSWORD trong `.env` hoặc môi trường tiến trình. Topic phải là iot/devices/+/telemetry.
 - MQTT TLS: mqtt_tls=true và mqtt_ca_certs trỏ tới CA tin cậy. Không bỏ qua kiểm tra chứng chỉ.
-- MySQL: khối mysql gồm host, port, user, password, database; ssl_ca tùy chọn. Biến IOT_MYSQL_* ghi đè file. Kết nối đặt phiên UTC và có timeout.
-- EMQX quản trị: khối emqx_admin hoặc IOT_EMQX_API_URL, IOT_EMQX_API_KEY, IOT_EMQX_API_SECRET, IOT_EMQX_DEPLOYMENT, IOT_EMQX_POLICY_VERIFIED. Khóa này tách biệt với tài khoản MQTT của backend và node. Chi tiết và giới hạn Serverless ở [LONG_API](../docs/LONG_API.md).
+- MySQL: một nguồn duy nhất là `IOT_MYSQL_*` trong `.env` (hoặc biến môi trường tiến trình); cả SQLAlchemy và PyMySQL dùng cùng giá trị. `IOT_MYSQL_SSL_CA` tùy chọn.
+- EMQX quản trị: cấu hình không bí mật có thể ở khối emqx_admin; API URL/key/secret, deployment và policy verification nhận IOT_EMQX_* từ `.env` hoặc môi trường tiến trình. Key/secret tách biệt với tài khoản MQTT của backend và node. Chi tiết và giới hạn Serverless ở [LONG_API](../docs/LONG_API.md).
 - settings.local.json và .env không được commit. Mẫu để trống mọi bí mật; thiếu mật khẩu MySQL hoặc JWT_SECRET thì backend không khởi động.
 
 ## Hành vi dữ liệu và điều khiển
@@ -61,7 +62,7 @@ Bộ mặc định chạy API thật trong tiến trình với adapter SQLite v�
 
 [mysql_integration.py](../tests/backend/mysql_integration.py) chạy lại API và migration trên MySQL tạm riêng ở 127.0.0.1:13317. Script kiểm tra datadir trước mọi thao tác tạo DB và không chạm dịch vụ MySQL đang dùng. Cách chạy và bằng chứng ở [trạng thái triển khai](../docs/LONG_IMPLEMENTATION_STATUS.md).
 
-test_devices.py là smoke test có thay đổi dữ liệu, chỉ chạy trên DB thử. Cấp ba token từ luồng đăng nhập thật qua IOT_TEST_ADMIN_TOKEN, IOT_TEST_OWNER_TOKEN, IOT_TEST_TENANT_TOKEN. Script không tự ký token và không đọc JWT_SECRET. Dữ liệu mẫu dùng ID 1001/1002/1003 nhưng tài khoản mặc định locked, hash giả; cần người 3 chuẩn bị tài khoản đăng nhập thật trước.
+scripts/test_devices.py là smoke test có thay đổi dữ liệu, chỉ chạy trên DB thử. Cấp ba token từ luồng đăng nhập thật qua IOT_TEST_ADMIN_TOKEN, IOT_TEST_OWNER_TOKEN, IOT_TEST_TENANT_TOKEN. Script không tự ký token và không đọc JWT_SECRET. Dữ liệu mẫu dùng ID 1001/1002/1003 nhưng tài khoản mặc định locked, hash giả; cần người 3 chuẩn bị tài khoản đăng nhập thật trước.
 
 ## Phối hợp còn cần
 

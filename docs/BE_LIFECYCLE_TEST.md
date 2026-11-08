@@ -7,7 +7,7 @@ Kịch bản này dùng node01 đã active/active, thông tin MQTT vẫn dùng �
 Trong cửa sổ CMD đang chạy BE, nhấn Ctrl+C, đợi dừng hoàn toàn rồi chạy lại từ thư mục dự án:
 
 ```bat
-.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 Giữ JWT_SECRET giống phiên trước. Nếu dùng CMD mới, cần đặt lại biến này trước khi chạy BE. Không mở thêm worker/backend thứ hai trên cùng DB.

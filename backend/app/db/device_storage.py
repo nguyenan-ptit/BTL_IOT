@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pymysql
 from fastapi import HTTPException
 
-from auth import room_scope, verify_room_access
-from validation import sensor_details
+from app.core.legacy_auth import room_scope, verify_room_access
+from app.services.telemetry_validation import sensor_details
 
 logger = logging.getLogger("iot_full")
 ONLINE_WINDOW_S = 20

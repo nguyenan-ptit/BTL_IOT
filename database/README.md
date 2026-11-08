@@ -24,7 +24,7 @@ seed_demo.sql tạo node01/node02 active/active để thử ingestion, nhưng mq
 Dừng backend và sao lưu bằng công cụ MySQL trước khi --apply. MySQL DDL tự commit; nếu gián đoạn, giữ backend dừng và chạy lại migration. Công cụ đọc định nghĩa mới từ init.sql, không duy trì bản CREATE TABLE thứ hai.
 
 ~~~powershell
-# Cấu hình kết nối DB cần nâng cấp bằng settings.local.json hoặc IOT_MYSQL_*.
+# Cấu hình kết nối DB cần nâng cấp bằng IOT_MYSQL_* trong file .env ở thư mục gốc (hoặc biến môi trường tiến trình).
 .venv/Scripts/python.exe backend/migrate.py --check
 .venv/Scripts/python.exe backend/migrate.py --apply
 ~~~

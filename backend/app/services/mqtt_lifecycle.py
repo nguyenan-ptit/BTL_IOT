@@ -6,9 +6,9 @@ import uuid
 
 from fastapi import HTTPException
 
-from auth import verify_room_access
-from emqx_admin import AdminError
-from storage import allowed_device, audit, public_row, session
+from app.core.legacy_auth import verify_room_access
+from app.integrations.emqx.admin import AdminError
+from app.db.device_storage import allowed_device, audit, public_row, session
 
 
 def _password_digest(operation_id, password):

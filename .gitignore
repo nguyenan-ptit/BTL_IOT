@@ -27,6 +27,8 @@ build/
 *.elf
 *.map
 *.hex
+*.py[cod]
+.pytest_cache/
 *.o
 *.exe
 *.bak
@@ -39,3 +41,4 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+

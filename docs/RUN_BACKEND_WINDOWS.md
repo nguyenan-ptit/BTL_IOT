@@ -8,6 +8,7 @@ Chạy lệnh từ thư mục gốc repository. Hướng dẫn này dành cho CM
 py -3 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 copy backend\settings.example.json backend\settings.local.json
+copy .env.example .env
 ```
 
 Chỉ copy file mẫu khi chưa có settings.local.json. Nếu đã cấu hình, sửa file đang có để không mất thông tin kết nối. Cập nhật code/package không cần tạo lại môi trường ảo.
@@ -34,9 +35,9 @@ Nếu user đã tồn tại, CREATE USER IF NOT EXISTS không đổi mật khẩ
 
 Dữ liệu demo là dữ liệu test. Các password_hash có chữ DEMO không dùng để đăng nhập; user mẫu mặc định locked. Thông tin MQTT trong SQL không tự tạo tài khoản trên broker. Xem [database README](../database/README.md).
 
-## 3. Cấu hình backend/settings.local.json
+## 3. Cấu hình MySQL trong .env và MQTT trong backend/settings.local.json
 
-Điền bằng thông tin của môi trường nhận, không dùng đường dẫn CA/mật khẩu từ máy người bàn giao. Ví dụ khung cấu hình Cloud:
+Điền IOT_MYSQL_HOST, IOT_MYSQL_PORT, IOT_MYSQL_USER, IOT_MYSQL_PASSWORD, IOT_MYSQL_DATABASE và tùy chọn IOT_MYSQL_SSL_CA trong `.env`. Cả SQLAlchemy và PyMySQL dùng chung cấu hình này. Không dùng mật khẩu/CA từ máy người bàn giao. Khung MySQL trong `.env.example` dùng giá trị mẫu.
 
 ```json
 {
@@ -44,24 +45,12 @@ Dữ liệu demo là dữ liệu test. Các password_hash có chữ DEMO không 
   "mqtt_port": 8883,
   "mqtt_topic": "iot/devices/+/telemetry",
   "mqtt_client_id": "iot-backend-local",
-  "mqtt_username": "<tai-khoan-MQTT-cua-BE>",
-  "mqtt_password": "<mat-khau-MQTT-cua-BE>",
   "mqtt_tls": true,
   "mqtt_ca_certs": "C:/certs/mqtt-ca.pem",
   "discovery_enabled": false,
-  "mysql": {
-    "host": "127.0.0.1",
-    "port": 3306,
-    "user": "iot_app",
-    "password": "<mat-khau-MySQL-rieng>",
-    "database": "iot_db",
-    "ssl_ca": null
-  },
   "emqx_admin": {
     "deployment": "disabled",
     "base_url": "",
-    "api_key": "",
-    "api_secret": "",
     "policy_verified": false,
     "legacy_node_usernames": {},
     "timeout_s": 5
@@ -73,11 +62,11 @@ Thay mọi placeholder; file CA phải tồn tại. Với broker LAN không TLS,
 
 MySQL dùng đúng cổng server đang chạy. Cổng 13317 và datadir test-output/mysql-long-review/data là instance test đã tạo riêng trên máy bàn giao, không được đóng gói trong Git. Máy mới không tự có MySQL ở 13317.
 
-Backend đọc settings.local.json và các biến môi trường của tiến trình. Biến IOT_MYSQL_* và IOT_EMQX_* ghi đè file; MQTT có IOT_MQTT_HOST/USERNAME/PASSWORD. Port/TLS/CA MQTT điền trong file. `.env` không tự được nạp. Không đưa file cấu hình riêng, CA cục bộ, token hoặc khóa vào commit.
+Backend đọc `.env` cho MySQL, JWT, mật khẩu MQTT và thông tin EMQX; biến môi trường tiến trình được ưu tiên. MQTT host/port/TLS/CA và tùy chọn EMQX không bí mật có thể để trong settings.local.json. Không đưa file cấu hình riêng, CA cục bộ, token hoặc khóa vào commit.
 
 ## 4. Kiểm tra hoặc nâng cấp schema
 
-Dừng BE trước khi migration; load_settings cần cấu hình MQTT/MySQL hợp lệ kể cả khi chỉ kiểm tra DB.
+Dừng BE trước khi migration; load_settings cần cấu hình MQTT hợp lệ và .env cần IOT_MYSQL_* hợp lệ kể cả khi chỉ kiểm tra DB.
 
 ```bat
 .venv\Scripts\python.exe backend/migrate.py --check
@@ -127,7 +116,7 @@ Nếu dùng PowerShell: đặt `$env:JWT_SECRET = '<khoa-rieng>'` thay cho lện
 ## 6. Chạy server và gọi API
 
 ```bat
-.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 Đợi Application startup complete. Chỉ chạy một BE/worker trên mỗi DB. Nhấn Ctrl+C để dừng; sau khi sửa source phải dừng rồi chạy lại để nạp code.
@@ -162,7 +151,7 @@ Bộ MySQL riêng chỉ chạy theo [tests README](../tests/README.md), không t
 | Lỗi | Cách kiểm tra |
 |---|---|
 | `& was unexpected at this time` | Đang dùng cú pháp PowerShell trong CMD; dùng đúng các lệnh bat trong hướng dẫn này. |
-| JWT_SECRET thiếu hoặc ngắn | Đặt khóa trong đúng cửa sổ chạy BE rồi chạy lại; `.env` không tự nạp. |
+| JWT_SECRET thiếu hoặc ngắn | Đặt khóa trong `.env` hoặc đúng cửa sổ chạy BE rồi chạy lại. |
 | Database đã có backend hoặc migration | Dừng phiên BE/migration cũ; dùng workers=1. Không khởi động thêm để thay phiên cũ. |
 | 401 token không hợp lệ/hết hạn | Token có đúng khóa ký của BE, còn hạn và được copy riêng chuỗi JWT không? |
 | 401 tài khoản không hoạt động/quyền đổi | Kiểm tra users.status=active và role SQL trùng token, đúng database. |

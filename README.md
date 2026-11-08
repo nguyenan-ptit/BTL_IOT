@@ -47,7 +47,7 @@ Làm theo [hướng dẫn backend từ đầu](backend/README.md): tạo môi tr
 
 ```bat
 set "JWT_SECRET=<khoa-dung-chung-voi-dich-vu-tai-khoan-it-nhat-32-ky-tu>"
-.venv\Scripts\python.exe -m uvicorn app:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
+.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 Thay placeholder JWT_SECRET bằng khóa riêng thực tế; file `.env` không được tự nạp. Mỗi DB chỉ chạy một backend/worker. `/api/health` công khai; `/api/devices`, lịch sử và thao tác quản lý cần Bearer JWT của user active trong SQL. Swagger ở http://127.0.0.1:8000/docs; `/` là trang thử API.
