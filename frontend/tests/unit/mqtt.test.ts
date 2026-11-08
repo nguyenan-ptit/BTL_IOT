@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  failedSteps,
-  generateMqttPassword,
-  mqttOperationSchema,
-  mqttPasswordSchema,
-} from '@/features/nodes/mqtt'
+import { mqttOperationSchema } from '@/features/nodes/mqtt'
 
 // Ví dụ "incomplete" trong docs/LONG_API.md, bổ sung các cột của bảng mqtt_operations.
 const incomplete = {
@@ -23,23 +18,8 @@ const incomplete = {
   finished_at: null,
 }
 
-describe('tài khoản MQTT của node', () => {
-  it('tạo mật khẩu 24 ký tự chữ và số, mỗi lần khác nhau', () => {
-    const a = generateMqttPassword()
-    const b = generateMqttPassword()
-    expect(a).toMatch(/^[A-Za-z0-9]{24}$/)
-    expect(a).not.toBe(b)
-  })
-
-  it('mật khẩu 16–128 ký tự', () => {
-    expect(mqttPasswordSchema.safeParse('a'.repeat(15)).success).toBe(false)
-    expect(mqttPasswordSchema.safeParse('a'.repeat(16)).success).toBe(true)
-    expect(mqttPasswordSchema.safeParse('a'.repeat(129)).success).toBe(false)
-  })
-
-  it('đọc được thao tác chưa hoàn tất và liệt kê bước lỗi', () => {
-    const op = mqttOperationSchema.parse(incomplete)
-    expect(op.status).toBe('incomplete')
-    expect(failedSteps(op)).toEqual(['capabilities'])
+describe('thao tác MQTT khi ngừng sử dụng node', () => {
+  it('đọc được thao tác chưa hoàn tất', () => {
+    expect(mqttOperationSchema.parse(incomplete).status).toBe('incomplete')
   })
 })

@@ -40,6 +40,8 @@ Trong `.env.local`, đặt `VITE_API_BASE_URL` là địa chỉ backend (mặc �
 - Route của Vĩ (`/api/auth`, `/api/rooms`, `/api/incidents`, `/api/users`, `/api/audit-logs`) dùng thẳng. Route của Long (`/api/devices*`, `/api/history`) được chuyển sang kiểu dữ liệu của website trong `src/features/devices/`.
 - Trường nào lệch, console báo "Response của … không khớp hợp đồng".
 
+Triển khai trên Vercel: `vercel.json` chuyển `/api/*` sang địa chỉ backend (rewrite đầu tiên) và trả `index.html` cho mọi đường dẫn khác. Địa chỉ `trycloudflare.com` đổi mỗi lần chạy lại tunnel, nên khi đổi phải sửa `destination` trong `vercel.json` rồi chạy lại `npx vercel --prod`. Qua Vercel, lệnh gửi ngưỡng và thử còi bị backend trả 403 vì Origin khác địa chỉ backend; các chức năng xem dữ liệu vẫn chạy.
+
 Khi triển khai bản build (`dist/`), website gọi `/api` trên cùng domain, nên cần đặt `dist/` và backend sau cùng một địa chỉ (FastAPI phục vụ file tĩnh, hoặc nginx chuyển `/api` sang backend).
 
 ## Cấu trúc

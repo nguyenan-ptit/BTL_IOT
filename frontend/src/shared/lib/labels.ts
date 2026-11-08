@@ -63,3 +63,11 @@ export const auditActionLabel: Record<AuditAction, string> = {
   incident_acknowledged: 'Tiếp nhận sự cố',
   threshold_updated: 'Đổi ngưỡng cảnh báo',
 }
+
+/**
+ * Số/tên phòng không kèm chữ "Phòng". Backend đặt tên dạng "Phòng 101", còn giao diện tự thêm
+ * chữ "Phòng" khi hiển thị, nên bỏ phần đầu để không thành "Phòng Phòng 101".
+ */
+export function roomNumber(name: string): string {
+  return name.replace(/^phòng\s+/i, '')
+}

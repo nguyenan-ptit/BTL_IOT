@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { useCurrentUser, usePermission } from '@/features/auth/hooks'
 import type { Permission } from '@/features/auth/schemas'
+import type { Role } from '@/shared/schemas/common'
 import { Button } from '@/shared/ui/Button'
 import { LOGIN_PATH } from './paths'
 
@@ -52,6 +53,17 @@ export function RequirePermission({
 }) {
   const allowed = usePermission(permission)
   if (!allowed) return <ForbiddenPage />
+  return children
+}
+
+/**
+ * Trang chỉ dành cho một vai trò, khi backend chưa có permission riêng cho chức năng đó
+ * (chủ trọ thêm người thuê qua POST /api/accounts/tenants), hoặc khi một vai trò không được xem
+ * dữ liệu (quản trị viên không xem số đo của phòng).
+ */
+export function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
+  const { data: user } = useCurrentUser()
+  if (!user || !roles.includes(user.role)) return <ForbiddenPage />
   return children
 }
 

@@ -28,8 +28,6 @@ const dateFormat = new Intl.DateTimeFormat(LOCALE, {
   year: 'numeric',
 })
 
-const relativeFormat = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' })
-
 function toDate(value: string | Date): Date {
   return typeof value === 'string' ? new Date(value) : value
 }
@@ -56,12 +54,10 @@ export function formatDate(value: string | Date): string {
   return `${part(parts, 'day')}/${part(parts, 'month')}/${part(parts, 'year')}`
 }
 
-/** "5 giây trước", "3 phút trước", "hôm qua"... */
-export function formatRelative(value: string | Date, now: Date = new Date()): string {
-  const diffSeconds = Math.round((toDate(value).getTime() - now.getTime()) / 1000)
-  const abs = Math.abs(diffSeconds)
-  if (abs < 60) return relativeFormat.format(diffSeconds, 'second')
-  if (abs < 3600) return relativeFormat.format(Math.round(diffSeconds / 60), 'minute')
-  if (abs < 86400) return relativeFormat.format(Math.round(diffSeconds / 3600), 'hour')
-  return relativeFormat.format(Math.round(diffSeconds / 86400), 'day')
+/** Giờ đến phút: "14:58" nếu cùng ngày với `now`, "08/11 23:30" nếu khác ngày. */
+export function formatClock(value: string | Date, now: Date = new Date()): string {
+  const parts = dateTimeFormat.formatToParts(toDate(value))
+  const clock = `${part(parts, 'hour')}:${part(parts, 'minute')}`
+  if (formatDate(value) === formatDate(now)) return clock
+  return `${part(parts, 'day')}/${part(parts, 'month')} ${clock}`
 }

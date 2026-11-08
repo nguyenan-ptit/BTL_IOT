@@ -8,6 +8,7 @@ import { HistoryChart } from '../components/HistoryChart'
 import { HistoryTable } from '../components/HistoryTable'
 import { customRange, RANGE_OPTIONS, useHistoryFilters, type RangeOption } from '../filters'
 import { useMeasurements } from '../hooks'
+import { roomNumber } from '@/shared/lib/labels'
 
 const rangeLabel: Record<RangeOption, string> = {
   'gan-nhat': `${HISTORY_LIMIT} mẫu gần nhất`,
@@ -47,7 +48,7 @@ export default function HistoryPage() {
           >
             {statuses?.map((s) => (
               <option key={s.room.id} value={s.room.id}>
-                Phòng {s.room.name}
+                Phòng {roomNumber(s.room.name)}
               </option>
             ))}
           </select>

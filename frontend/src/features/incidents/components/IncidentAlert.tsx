@@ -2,6 +2,7 @@ import { ChevronRight, Siren } from 'lucide-react'
 import { Link, useLocation } from 'react-router'
 import { useActiveIncidents } from '../hooks'
 import { signsText } from '../format'
+import { roomNumber } from '@/shared/lib/labels'
 
 /**
  * Dải báo sự cố chưa tiếp nhận, hiện trên mọi trang (FR-018). Ẩn trên trang tổng quan vì ở đó
@@ -25,7 +26,8 @@ export function IncidentAlert() {
       >
         <Siren aria-hidden className="size-5 shrink-0" />
         <span className="flex-1">
-          Phòng {first.roomName}: phát hiện {signsText(first.signs).toLowerCase()}, chưa tiếp nhận
+          Phòng {roomNumber(first.roomName)}: phát hiện {signsText(first.signs).toLowerCase()}, chưa
+          tiếp nhận
           {more > 0 && ` · và ${more} sự cố khác`}
         </span>
         <span className="flex shrink-0 items-center underline-offset-4 hover:underline">

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { currentThresholds, toMeasurement, toThresholdPayload } from '@/features/devices/adapters'
 import { deviceListSchema, telemetrySchema } from '@/features/devices/schemas'
-// Bản tin mẫu firmware schema 6 trong repo (docs/MQTT_CONTRACT.md mục 2).
-import fault from '../../../examples/telemetry-fault.json'
-import normal from '../../../examples/telemetry-normal.json'
-import outputTest from '../../../examples/telemetry-output-test.json'
+// Bản tin mẫu firmware schema 6, chép từ examples/ ở gốc repo (docs/MQTT_CONTRACT.md mục 2).
+// Để trong frontend/ vì Vercel CLI chỉ tải lên thư mục này.
+import fault from '../fixtures/telemetry-fault.json'
+import normal from '../fixtures/telemetry-normal.json'
+import outputTest from '../fixtures/telemetry-output-test.json'
 
 const at = '2026-11-08T03:00:00+00:00'
 

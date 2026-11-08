@@ -2,11 +2,12 @@ import { ChevronRight, Siren } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useCurrentUser } from '@/features/auth/hooks'
-import { formatRelative, formatTime } from '@/shared/lib/datetime'
+import { formatClock } from '@/shared/lib/datetime'
 import { measurementText, signsText } from '../format'
 import type { Incident } from '../schemas'
 import { AcknowledgeButton } from './AcknowledgeButton'
 import { Stamps } from './Stamps'
+import { roomNumber } from '@/shared/lib/labels'
 
 /**
  * Tờ thông báo sự cố ghim lên thẻ phòng: điểm nhấn của hướng "bảng tin nhà trọ".
@@ -18,7 +19,7 @@ export function IncidentNotice({ incident, now }: { incident: Incident; now: Dat
 
   return (
     <section
-      aria-label={`Sự cố phòng ${incident.roomName}`}
+      aria-label={`Sự cố phòng ${roomNumber(incident.roomName)}`}
       className="relative -mx-0.5 -mt-0.5 rounded-t-[var(--radius-sheet)] bg-alarm px-4 pt-5 pb-4 text-white shadow-[var(--shadow-pinned)]"
     >
       {/* Đinh ghim tờ thông báo lên bảng. */}
@@ -33,8 +34,8 @@ export function IncidentNotice({ incident, now }: { incident: Incident; now: Dat
             Phát hiện {signsText(incident.signs).toLowerCase()}
           </p>
           <p className="tabular text-sm text-white/90">
-            Từ {formatTime(incident.startedAt)} ({formatRelative(incident.startedAt, now)}) · Mới
-            nhất: {measurementText(incident.latestMeasurement)}
+            Từ {formatClock(incident.startedAt, now)} · Mới nhất:{' '}
+            {measurementText(incident.latestMeasurement)}
           </p>
         </div>
       </div>

@@ -1,12 +1,20 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/mockServiceWorker.js", "/favicon.png"]
+    "exclude": [
+      "/assets/*",
+      "/favicon.png"
+    ]
   },
   "globalHeaders": {
     "Cache-Control": "no-cache"
   },
   "routes": [
-    { "route": "/assets/*", "headers": { "Cache-Control": "public, max-age=31536000, immutable" } }
+    {
+      "route": "/assets/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    }
   ]
 }

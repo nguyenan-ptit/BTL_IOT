@@ -3,8 +3,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useCurrentUser } from '@/features/auth/hooks'
 import { isApiError } from '@/shared/api/errors'
-import { formatDateTime, formatRelative, formatTime } from '@/shared/lib/datetime'
-import { useNow } from '@/shared/lib/useNow'
+import { formatDateTime, formatTime } from '@/shared/lib/datetime'
 import { cn } from '@/shared/ui/cn'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { Sheet } from '@/shared/ui/Sheet'
@@ -43,7 +42,6 @@ export default function IncidentDetailPage() {
   const { id = '' } = useParams()
   const incident = useIncident(id)
   const { data: me } = useCurrentUser()
-  const now = useNow(1_000)
   const [fresh, setFresh] = useState(false)
 
   if (isApiError(incident.error, 'NOT_FOUND')) {
@@ -90,9 +88,7 @@ export default function IncidentDetailPage() {
                   <dl className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <dt className="font-semibold text-ink-soft">Bắt đầu</dt>
-                      <dd className="tabular">
-                        {formatDateTime(data.startedAt)} ({formatRelative(data.startedAt, now)})
-                      </dd>
+                      <dd className="tabular">{formatDateTime(data.startedAt)}</dd>
                     </div>
                     <div>
                       <dt className="font-semibold text-ink-soft">Kết thúc</dt>

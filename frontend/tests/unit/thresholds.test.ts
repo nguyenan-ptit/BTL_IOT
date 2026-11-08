@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { controlBlockReason } from '@/features/devices/adapters'
 import { telemetrySchema, type DeviceItem } from '@/features/devices/schemas'
 import { thresholdFormSchema } from '@/features/thresholds/schemas'
-import normal from '../../../examples/telemetry-normal.json'
+import normal from '../fixtures/telemetry-normal.json'
 
 const ok = { gasOn: 650, gasOff: 550, tempOn: 65, tempOff: 60 }
 
