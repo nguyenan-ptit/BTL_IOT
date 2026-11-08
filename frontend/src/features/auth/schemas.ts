@@ -32,6 +32,14 @@ export const currentUserSchema = userSchema.extend({
 })
 export type CurrentUser = z.infer<typeof currentUserSchema>
 
+/** Response của POST /api/auth/login: token Bearer + người dùng hiện tại. */
+export const loginResponseSchema = z.object({
+  accessToken: z.string().min(1),
+  tokenType: z.literal('Bearer'),
+  expiresIn: z.number().int().positive(),
+  user: currentUserSchema,
+})
+
 export const loginFormSchema = z.object({
   username: z
     .string()
@@ -41,3 +49,22 @@ export const loginFormSchema = z.object({
   password: z.string().min(1, 'Nhập mật khẩu.').max(72, 'Mật khẩu tối đa 72 ký tự.'),
 })
 export type LoginForm = z.infer<typeof loginFormSchema>
+
+/** Đổi mật khẩu, theo ChangePasswordRequest của backend (mật khẩu mới 8–72 ký tự). */
+export const changePasswordFormSchema = z
+  .object({
+    currentPassword: z
+      .string()
+      .min(1, 'Nhập mật khẩu hiện tại.')
+      .max(72, 'Mật khẩu tối đa 72 ký tự.'),
+    newPassword: z
+      .string()
+      .min(8, 'Mật khẩu mới ít nhất 8 ký tự.')
+      .max(72, 'Mật khẩu tối đa 72 ký tự.'),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.confirmPassword === v.newPassword, {
+    path: ['confirmPassword'],
+    message: 'Mật khẩu nhập lại không khớp.',
+  })
+export type ChangePasswordForm = z.infer<typeof changePasswordFormSchema>

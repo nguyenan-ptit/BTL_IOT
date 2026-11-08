@@ -1,27 +1,27 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { isApiError } from '@/shared/api/errors'
-import { formatInteger, formatTemperature } from '@/shared/lib/number'
 import { Button } from '@/shared/ui/Button'
 import { Field, TextInput } from '@/shared/ui/Field'
-import { useSaveThresholds } from '../api'
+import type { Telemetry } from '@/features/devices/schemas'
+import { useSendThresholds } from '../api'
 import { thresholdFormSchema, type ThresholdValues } from '../schemas'
 
-/** Form sửa một bộ ngưỡng, áp dụng cho một hoặc nhiều phòng (FR-040, FR-042). */
+/** Form gửi ngưỡng mới cho một node. Đóng ngay khi backend nhận lệnh; kết quả hiện trên thẻ node. */
 export function ThresholdForm({
-  roomIds,
-  roomNames,
+  deviceId,
+  roomName,
+  data,
   initial,
-  defaults,
   onDone,
 }: {
-  roomIds: string[]
-  roomNames: string[]
+  deviceId: string
+  roomName: string
+  data: Telemetry
   initial: ThresholdValues
-  defaults: ThresholdValues | undefined
   onDone: () => void
 }) {
-  const save = useSaveThresholds()
+  const send = useSendThresholds()
   const form = useForm<ThresholdValues>({
     resolver: zodResolver(thresholdFormSchema),
     defaultValues: initial,
@@ -34,22 +34,21 @@ export function ThresholdForm({
       noValidate
       className="flex flex-col gap-5 p-5"
       onSubmit={form.handleSubmit((values) =>
-        save.mutate({ roomIds, values }, { onSuccess: onDone }),
+        send.mutate({ deviceId, data, values }, { onSuccess: onDone }),
       )}
     >
       <p className="text-sm text-ink-soft">
-        Áp dụng cho{' '}
-        <span className="tabular font-semibold text-ink">
-          {roomNames.map((n) => `phòng ${n}`).join(', ')}
-        </span>
-        . Cảnh báo bật khi số đo chạm ngưỡng bật và chỉ tắt khi số đo xuống tới ngưỡng tắt.
+        Gửi cho node <span className="font-semibold text-ink">{deviceId}</span> (phòng{' '}
+        <span className="tabular font-semibold text-ink">{roomName}</span>). Node chỉ dùng ngưỡng
+        mới sau khi ESP xác nhận đã lưu. Cảnh báo bật khi số đo chạm ngưỡng bật và chỉ tắt khi số đo
+        xuống tới ngưỡng tắt.
       </p>
 
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-1 font-bold">Khí gas/khói</legend>
-        <p className="-mt-1 text-sm text-ink-soft">Số ADC thô của MQ-2 (0–1023), không phải ppm.</p>
+        <p className="-mt-1 text-sm text-ink-soft">Số ADC thô của MQ-2, không phải ppm.</p>
         <div className="grid grid-cols-2 gap-3">
-          <Field id="gas-on" label="Ngưỡng bật" error={errors.gasOn?.message}>
+          <Field id="gas-on" label="Ngưỡng bật (1–1023)" error={errors.gasOn?.message}>
             <TextInput
               id="gas-on"
               type="number"
@@ -59,7 +58,7 @@ export function ThresholdForm({
               {...form.register('gasOn', num)}
             />
           </Field>
-          <Field id="gas-off" label="Ngưỡng tắt" error={errors.gasOff?.message}>
+          <Field id="gas-off" label="Ngưỡng tắt (0–1022)" error={errors.gasOff?.message}>
             <TextInput
               id="gas-off"
               type="number"
@@ -80,7 +79,7 @@ export function ThresholdForm({
               id="temp-on"
               type="number"
               inputMode="decimal"
-              step={0.5}
+              step={0.1}
               aria-invalid={!!errors.tempOn}
               {...form.register('tempOn', num)}
             />
@@ -90,7 +89,7 @@ export function ThresholdForm({
               id="temp-off"
               type="number"
               inputMode="decimal"
-              step={0.5}
+              step={0.1}
               aria-invalid={!!errors.tempOff}
               {...form.register('tempOff', num)}
             />
@@ -98,29 +97,14 @@ export function ThresholdForm({
         </div>
       </fieldset>
 
-      {defaults && (
-        <p className="text-sm text-ink-soft">
-          Mặc định: gas bật {formatInteger(defaults.gasOn)}, tắt {formatInteger(defaults.gasOff)};
-          nhiệt độ bật {formatTemperature(defaults.tempOn)}, tắt{' '}
-          {formatTemperature(defaults.tempOff)}.{' '}
-          <button
-            type="button"
-            className="font-semibold text-board-900 underline"
-            onClick={() => form.reset(defaults)}
-          >
-            Điền giá trị mặc định
-          </button>
-        </p>
-      )}
-
-      {save.error && (
+      {send.error && (
         <p
           role="alert"
           className="rounded-[var(--radius-sheet)] bg-alarm-wash px-3 py-2 text-sm font-medium text-alarm-deep"
         >
-          {isApiError(save.error, 'VALIDATION_ERROR')
-            ? 'Ngưỡng không hợp lệ, kiểm tra lại các ô.'
-            : 'Chưa lưu được. Kiểm tra mạng rồi thử lại.'}
+          {isApiError(send.error)
+            ? send.error.message
+            : 'Chưa gửi được. Kiểm tra mạng rồi thử lại.'}
         </p>
       )}
 
@@ -128,8 +112,8 @@ export function ThresholdForm({
         <Button variant="secondary" onClick={onDone}>
           Hủy
         </Button>
-        <Button type="submit" loading={save.isPending}>
-          {roomIds.length > 1 ? `Lưu cho ${roomIds.length} phòng` : 'Lưu ngưỡng'}
+        <Button type="submit" loading={send.isPending}>
+          Gửi ngưỡng
         </Button>
       </div>
     </form>

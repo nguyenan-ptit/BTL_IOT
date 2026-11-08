@@ -3,14 +3,16 @@ import {
   ClipboardList,
   Cpu,
   History,
+  KeyRound,
   LayoutGrid,
   LogOut,
   SlidersHorizontal,
   UsersRound,
   WifiOff,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
+import { ChangePasswordDialog } from '@/features/auth/components/ChangePasswordDialog'
 import { useCurrentUser, useLogout, usePermission } from '@/features/auth/hooks'
 import { useActiveIncidents } from '@/features/incidents/hooks'
 import { useConnection } from '@/shared/api/useConnection'
@@ -69,6 +71,7 @@ export function AppShell({ alertSlot }: { alertSlot?: ReactNode }) {
   const navigate = useNavigate()
   const connection = useConnection()
   const { main, admin } = useNavItems()
+  const [changingPassword, setChangingPassword] = useState(false)
 
   return (
     <div className="flex min-h-dvh flex-col pb-16 md:pb-0">
@@ -108,6 +111,15 @@ export function AppShell({ alertSlot }: { alertSlot?: ReactNode }) {
               </div>
               <button
                 type="button"
+                onClick={() => setChangingPassword(true)}
+                className="flex h-9 items-center gap-1.5 rounded-[var(--radius-sheet)] px-2.5 text-sm font-semibold text-board-100 hover:bg-board-800 hover:text-white"
+              >
+                <KeyRound aria-hidden className="size-4" />
+                <span className="hidden sm:inline">Đổi mật khẩu</span>
+                <span className="sr-only sm:hidden">Đổi mật khẩu</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => logout.mutate(undefined, { onSettled: () => navigate(LOGIN_PATH) })}
                 className="flex h-9 items-center gap-1.5 rounded-[var(--radius-sheet)] px-2.5 text-sm font-semibold text-board-100 hover:bg-board-800 hover:text-white"
               >
@@ -136,6 +148,7 @@ export function AppShell({ alertSlot }: { alertSlot?: ReactNode }) {
         )}
         {alertSlot}
       </header>
+      <ChangePasswordDialog open={changingPassword} onClose={() => setChangingPassword(false)} />
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 md:px-6 md:py-8">
         <Outlet />

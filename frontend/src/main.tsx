@@ -5,19 +5,10 @@ import { Providers } from './app/providers'
 import { router } from './app/router'
 import './index.css'
 
-async function enableMocking() {
-  if (import.meta.env.VITE_USE_MOCK !== 'true') return
-  // Import động để build production không chứa dữ liệu giả lập khi tắt mock.
-  const { startMockApi } = await import('./mocks/browser')
-  await startMockApi()
-}
-
-enableMocking().then(() => {
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <Providers>
-        <RouterProvider router={router} />
-      </Providers>
-    </StrictMode>,
-  )
-})
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <Providers>
+      <RouterProvider router={router} />
+    </Providers>
+  </StrictMode>,
+)

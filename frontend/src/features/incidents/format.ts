@@ -4,7 +4,7 @@ import { formatInteger, formatTemperature } from '@/shared/lib/number'
 import type { HazardSign } from '@/shared/schemas/common'
 
 export function signsText(signs: HazardSign[]): string {
-  return signs.map((s) => hazardSignLabel[s]).join(', ')
+  return signs.length ? signs.map((s) => hazardSignLabel[s]).join(', ') : 'Cảnh báo'
 }
 
 /** "Gas 575 · 28,3 °C · Có lửa" */

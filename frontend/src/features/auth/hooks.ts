@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isApiError } from '@/shared/api/errors'
+import { getToken } from '@/shared/api/token'
 import { authKeys, fetchMe, login, logout } from './api'
 import type { CurrentUser, Permission } from './schemas'
 
@@ -8,6 +9,7 @@ export function useCurrentUser() {
   return useQuery({
     queryKey: authKeys.me,
     queryFn: async ({ signal }): Promise<CurrentUser | null> => {
+      if (!getToken()) return null
       try {
         return await fetchMe(signal)
       } catch (error) {

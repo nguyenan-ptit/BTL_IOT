@@ -19,7 +19,7 @@ export function HistoryTable({ measurements }: { measurements: Measurement[] }) 
           <thead className="border-b border-rule bg-ground text-left text-ink-soft">
             <tr>
               <th scope="col" className="px-3 py-2 font-semibold">
-                Thời điểm đo
+                Thời điểm nhận
               </th>
               <th scope="col" className="px-3 py-2 text-right font-semibold">
                 Gas/khói
@@ -29,9 +29,6 @@ export function HistoryTable({ measurements }: { measurements: Measurement[] }) 
               </th>
               <th scope="col" className="px-3 py-2 font-semibold">
                 Lửa
-              </th>
-              <th scope="col" className="px-3 py-2 font-semibold">
-                Nguồn
               </th>
             </tr>
           </thead>
@@ -60,13 +57,6 @@ export function HistoryTable({ measurements }: { measurements: Measurement[] }) 
                     <span className="font-semibold text-alarm-deep">Có lửa</span>
                   ) : (
                     'Không'
-                  )}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  {m.isBackfill ? (
-                    <span className="font-semibold">Gửi bù</span>
-                  ) : (
-                    <span className="text-ink-faint">Trực tiếp</span>
                   )}
                 </td>
               </tr>

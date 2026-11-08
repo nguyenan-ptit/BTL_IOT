@@ -1,6 +1,7 @@
 import type { z } from 'zod'
-import { apiErrorSchema } from '@/shared/schemas/common'
+import { apiErrorSchema, type ApiErrorBody } from '@/shared/schemas/common'
 import { ApiError, ContractError, NetworkError } from './errors'
+import { clearToken, getToken } from './token'
 
 type Listener = () => void
 
@@ -39,11 +40,24 @@ export function onUnauthorized(listener: Listener) {
   }
 }
 
+/** Header bắt buộc của lệnh điều khiển node (ngưỡng, thử còi) theo backend. */
+export const CONTROL_HEADERS: Record<string, string> = { 'X-IoT-Request': '1' }
+
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   query?: Record<string, string | number | boolean | string[] | null | undefined>
+  headers?: Record<string, string>
   signal?: AbortSignal
+}
+
+/** Body lỗi chuẩn `{code, message}`; route cũ của backend có thể trả `{detail: "..."}`. */
+function errorBody(status: number, raw: unknown): ApiErrorBody {
+  const parsed = apiErrorSchema.safeParse(raw)
+  if (parsed.success) return parsed.data
+  const detail = (raw as { detail?: unknown } | null)?.detail
+  if (typeof detail === 'string' && detail) return { code: `HTTP_${status}`, message: detail }
+  return { code: `HTTP_${status}`, message: 'Có lỗi xảy ra.' }
 }
 
 function buildUrl(path: string, query: RequestOptions['query']): string {
@@ -66,13 +80,16 @@ export async function request<S extends z.ZodType>(
   schema: S,
   options: RequestOptions = {},
 ): Promise<z.infer<S>> {
-  const { method = 'GET', body, query, signal } = options
+  const { method = 'GET', body, query, headers: extraHeaders, signal } = options
+  const headers: Record<string, string> = { ...extraHeaders }
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
   let response: Response
   try {
     response = await fetch(buildUrl(path, query), {
       method,
-      credentials: 'include',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
     })
@@ -89,13 +106,12 @@ export async function request<S extends z.ZodType>(
   }
 
   if (!response.ok) {
-    if (response.status === 401) unauthorizedListeners.forEach((l) => l())
+    if (response.status === 401) {
+      clearToken()
+      unauthorizedListeners.forEach((l) => l())
+    }
     const raw: unknown = await response.json().catch(() => null)
-    const parsed = apiErrorSchema.safeParse(raw)
-    throw new ApiError(
-      response.status,
-      parsed.success ? parsed.data : { code: `HTTP_${response.status}`, message: 'Có lỗi xảy ra.' },
-    )
+    throw new ApiError(response.status, errorBody(response.status, raw))
   }
 
   const raw: unknown = response.status === 204 ? null : await response.json()
