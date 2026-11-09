@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     emqx_policy_verified: bool | None = Field(default=None, validation_alias="IOT_EMQX_POLICY_VERIFIED")
     jwt_secret_key: str = Field(validation_alias=AliasChoices("JWT_SECRET", "JWT_SECRET_KEY", "jwt_secret_key"))
     access_token_expire_minutes: int = 30
-    CORS_ORIGINS=["http://localhost:5173","http://127.0.0.1:5173","https://frontend-iot-web-crm.vercel.app"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "https://frontend-iot-web-crm.vercel.app"]
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parents[3] / ".env"),
