@@ -17,7 +17,7 @@ import { toNodeListItem } from '../schemas'
 import { credentialLabel, deviceLifecycleLabel } from '../transitions'
 import { roomNumber } from '@/shared/lib/labels'
 
-function RegisterNodeSheet({ onDone }: { onDone: () => void }) {
+function RegisterNodeSheet({ onDone }: { onDone: (registeredId?: string) => void }) {
   return (
     <Sheet className="flex flex-col gap-4 p-4 sm:p-5">
       <h2 className="text-lg font-bold">Đăng ký node mới</h2>
@@ -38,6 +38,7 @@ export default function NodeListPage() {
     { history: 'replace' },
   )
   const [adding, setAdding] = useState(false)
+  const [registered, setRegistered] = useState<string | null>(null)
   const devices = useDevices({ refetchInterval: 10_000 })
   const rooms = useRooms()
   const roomNames = new Map(rooms.data?.map((r) => [r.id, r.name]))
@@ -62,7 +63,28 @@ export default function NodeListPage() {
         )}
       </header>
 
-      {adding && <RegisterNodeSheet onDone={() => setAdding(false)} />}
+      {adding && (
+        <RegisterNodeSheet
+          onDone={(id) => {
+            setAdding(false)
+            setRegistered(id ?? null)
+          }}
+        />
+      )}
+      {registered && (
+        <p
+          role="status"
+          className="rounded-[var(--radius-sheet)] border border-rule bg-sheet px-4 py-3 text-sm"
+        >
+          Đã đăng ký <span className="font-semibold">{registered}</span>, chờ xác nhận MQTT.{' '}
+          <Link
+            to={`/quan-tri/node/${encodeURIComponent(registered)}`}
+            className="font-semibold text-board-900 underline"
+          >
+            Mở node để xác nhận
+          </Link>
+        </p>
+      )}
 
       <div role="group" aria-label="Lọc theo trạng thái" className="flex flex-wrap gap-2">
         {deviceLifecycleSchema.options.map((l) => (

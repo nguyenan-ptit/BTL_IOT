@@ -16,10 +16,17 @@ import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { inputClass } from '@/shared/ui/Field'
 import { Sheet } from '@/shared/ui/Sheet'
+import { AttachMqttPanel } from '../components/AttachMqttPanel'
 import { ConnectivityText, LifecyclePill } from '../components/NodeBadges'
 import { useChangeLifecycle, useMoveNode, useNodeCommands } from '../hooks'
-import { maintenanceNoteSchema, toNodeListItem } from '../schemas'
-import { allowedTargets, transitionLabel } from '../transitions'
+import { canAttachExistingMqtt, maintenanceNoteSchema, toNodeListItem } from '../schemas'
+import {
+  allowedTargets,
+  credentialLabel,
+  deviceLifecycleLabel,
+  mqttSyncLabel,
+  transitionLabel,
+} from '../transitions'
 import { roomNumber } from '@/shared/lib/labels'
 
 function errorText(error: unknown): string {
@@ -200,11 +207,20 @@ export default function NodeDetailPage() {
                 <aside className="order-first flex flex-col gap-5 lg:order-none">
                   <Sheet className="flex flex-col gap-3 p-4 sm:p-5">
                     <h2 className="font-bold">Vòng đời</h2>
+                    {/* Ba trạng thái độc lập của backend, không gộp thành một. */}
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                      <dt className="text-ink-soft">Vòng đời</dt>
+                      <dd className="font-semibold">{deviceLifecycleLabel[node.lifecycle]}</dd>
+                      <dt className="text-ink-soft">Tài khoản MQTT</dt>
+                      <dd className="font-semibold">{credentialLabel[node.credential]}</dd>
+                      <dt className="text-ink-soft">Đồng bộ MQTT</dt>
+                      <dd className="font-semibold">{mqttSyncLabel[node.mqttSync]}</dd>
+                    </dl>
                     {targets.length === 0 ? (
                       <p className="text-ink-soft">
                         {retired
                           ? 'Node đã ngừng sử dụng. Chỉ còn xem lịch sử.'
-                          : 'Node cần được cấp tài khoản MQTT trước khi kích hoạt.'}
+                          : 'Xác nhận tài khoản MQTT trước khi kích hoạt.'}
                       </p>
                     ) : (
                       targets.map((t) => (
@@ -231,8 +247,14 @@ export default function NodeDetailPage() {
                     )}
                     {node.lifecycle === 'registered' && (
                       <p className="text-sm text-ink-soft">
-                        Node mới đăng ký cần được cấp tài khoản MQTT (qua backend) rồi mới kích hoạt
-                        được.
+                        Đã đăng ký, chờ xác nhận MQTT. Xác nhận ở ô bên dưới, sau đó node chuyển
+                        sang chờ kích hoạt.
+                      </p>
+                    )}
+                    {node.lifecycle === 'provisioned' && (
+                      <p className="text-sm text-ink-soft">
+                        Đã xác nhận MQTT, chờ kích hoạt. Kích hoạt xong node mới được nhận số đo;
+                        online hay không vẫn theo dõi riêng.
                       </p>
                     )}
                     {lifecycle.error && (
@@ -246,6 +268,9 @@ export default function NodeDetailPage() {
                       </p>
                     )}
                   </Sheet>
+                  {canAttachExistingMqtt(node) && (
+                    <AttachMqttPanel nodeId={node.id} username={item.device.mqtt_username} />
+                  )}
                 </aside>
               </div>
 

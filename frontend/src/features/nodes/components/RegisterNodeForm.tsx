@@ -14,6 +14,7 @@ const EMPTY_FORM: RegisterNodeInput = {
   room_id: '',
   mqtt_username: '',
   mqtt_client_id: '',
+  board_model: '',
   hardware_version: '',
   firmware_version: '',
 }
@@ -27,7 +28,8 @@ export function RegisterNodeForm({
   onDone,
 }: {
   presetRoomId?: string
-  onDone: () => void
+  /** Gọi với mã node khi đăng ký xong, không có tham số khi bấm Hủy. */
+  onDone: (registeredId?: string) => void
 }) {
   const rooms = useRooms()
   const register = useRegisterNode()
@@ -57,14 +59,14 @@ export function RegisterNodeForm({
         register.mutate(body, {
           onSuccess: () => {
             form.reset(initial)
-            onDone()
+            onDone(body.device_id)
           },
         }),
       )}
     >
       <p className="text-sm text-ink-soft sm:col-span-2">
-        Đăng ký chỉ ghi node vào hệ thống. Node cần được cấp tài khoản MQTT và nạp vào ESP rồi mới
-        kích hoạt được.
+        Tài khoản MQTT của node phải được tạo sẵn trên EMQX và nạp vào ESP. Đăng ký xong, quản trị
+        viên xác nhận tài khoản MQTT ở trang chi tiết node rồi mới kích hoạt.
       </p>
       {text('device_id', 'Mã node', 'Giống device_id trong firmware, ví dụ node03.')}
       {text('device_name', 'Tên node')}
@@ -97,6 +99,7 @@ export function RegisterNodeForm({
       )}
       {text('mqtt_username', 'Tên tài khoản MQTT (tham chiếu)')}
       {text('mqtt_client_id', 'MQTT Client ID (không bắt buộc)')}
+      {text('board_model', 'Loại bo mạch (không bắt buộc)', 'Ví dụ ESP8266 NodeMCU.')}
       {text('hardware_version', 'Phiên bản phần cứng (không bắt buộc)')}
       {text('firmware_version', 'Phiên bản firmware (không bắt buộc)')}
       {register.error && (
@@ -110,7 +113,7 @@ export function RegisterNodeForm({
         <Button type="submit" loading={register.isPending} className="h-11">
           Đăng ký
         </Button>
-        <Button variant="ghost" className="h-11" onClick={onDone}>
+        <Button variant="ghost" className="h-11" onClick={() => onDone()}>
           Hủy
         </Button>
       </div>

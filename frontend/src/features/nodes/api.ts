@@ -50,3 +50,20 @@ export async function fetchNodeCommands(id: string, signal?: AbortSignal) {
   )
   return result.items
 }
+
+/** Admin xác nhận tài khoản MQTT đã tạo sẵn trên EMQX cho node mới (không cấp tài khoản mới). */
+export function attachExistingMqtt(
+  id: string,
+  body: {
+    mqtt_username: string
+    connection_checked: boolean
+    topic_permissions_checked: boolean
+    verification_note: string
+  },
+) {
+  return request(
+    `${base(id)}/mqtt-credentials/attach-existing`,
+    z.looseObject({ device_id: z.string(), mqtt_sync_status: z.string() }),
+    { method: 'POST', body },
+  )
+}

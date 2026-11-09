@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deviceKeys } from '@/features/devices/api'
 import type { DeviceLifecycle } from '@/features/devices/schemas'
 import { roomKeys } from '@/features/rooms/api'
-import { changeLifecycle, fetchNodeCommands, moveNode, registerNode } from './api'
+import {
+  attachExistingMqtt,
+  changeLifecycle,
+  fetchNodeCommands,
+  moveNode,
+  registerNode,
+} from './api'
 
 export function useNodeCommands(id: string) {
   return useQuery({
@@ -39,6 +45,14 @@ export function useChangeLifecycle(id: string) {
   return useMutation({
     mutationFn: (body: { lifecycle_status: DeviceLifecycle; maintenance_note?: string }) =>
       changeLifecycle(id, body),
+    onSettled: invalidate,
+  })
+}
+
+export function useAttachExistingMqtt(id: string) {
+  const invalidate = useInvalidateNodes()
+  return useMutation({
+    mutationFn: (body: Parameters<typeof attachExistingMqtt>[1]) => attachExistingMqtt(id, body),
     onSettled: invalidate,
   })
 }

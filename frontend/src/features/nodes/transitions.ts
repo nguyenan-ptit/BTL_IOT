@@ -20,7 +20,7 @@ export function allowedTargets(lifecycle: DeviceLifecycle): DeviceLifecycle[] {
 
 export const deviceLifecycleLabel: Record<DeviceLifecycle, string> = {
   registered: 'Đã đăng ký',
-  provisioned: 'Đã cấp tài khoản',
+  provisioned: 'Chờ kích hoạt',
   active: 'Đang sử dụng',
   maintenance: 'Bảo trì',
   blocked: 'Đã khoá',
@@ -38,14 +38,15 @@ export const transitionLabel: Record<DeviceLifecycle, string> = {
 }
 
 export const credentialLabel: Record<CredentialStatus, string> = {
-  pending: 'Chưa cấp',
-  active: 'Đã cấp',
-  revoked: 'Đã thu hồi',
+  pending: 'Chờ cấp hoặc xác nhận',
+  active: 'Đã cấp hoặc xác nhận',
+  revoked: 'Đã đánh dấu thu hồi',
 }
 
 export const mqttSyncLabel: Record<MqttSyncStatus, string> = {
   unknown: 'Chưa rõ (cấu hình ngoài hệ thống)',
   pending: 'Đang đồng bộ',
   synced: 'Đã đồng bộ',
-  failed: 'Đồng bộ lỗi',
+  failed: 'Đồng bộ chưa hoàn tất',
+  manual_verified: 'Đã xác nhận MQTT thủ công',
 }

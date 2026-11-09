@@ -63,6 +63,7 @@ export const registerNodeFormSchema = z.object({
       'Tên tài khoản MQTT gồm 1–64 ký tự chữ, số, gạch dưới hoặc gạch ngang.',
     ),
   mqtt_client_id: optional(128, 'Client ID tối đa 128 ký tự.'),
+  board_model: optional(64, 'Loại bo mạch tối đa 64 ký tự.'),
   hardware_version: optional(32, 'Phiên bản phần cứng tối đa 32 ký tự.'),
   firmware_version: optional(64, 'Phiên bản firmware tối đa 64 ký tự.'),
 })
@@ -82,3 +83,27 @@ export const nodeCommandSchema = z.looseObject({
   error_message: z.string().nullable(),
 })
 export type NodeCommand = z.infer<typeof nodeCommandSchema>
+
+/** Node mới đang chờ cấp tài khoản MQTT lần đầu: điều kiện của API attach-existing. */
+export function canAttachExistingMqtt(node: NodeListItem): boolean {
+  return (
+    (node.lifecycle === 'registered' || node.lifecycle === 'provisioned') &&
+    node.credential === 'pending' &&
+    node.mqttSync === 'unknown' &&
+    node.operationId === null
+  )
+}
+
+const mustCheck = (message: string) => z.boolean().refine((v) => v, { message })
+
+/** Form "Xác nhận tài khoản MQTT có sẵn" (AttachExistingMqttRequest của backend). */
+export const attachMqttFormSchema = z.object({
+  connection_checked: mustCheck('Xác nhận đã kiểm tra ESP kết nối bằng đúng tài khoản.'),
+  topic_permissions_checked: mustCheck('Xác nhận đã kiểm tra quyền topic của node.'),
+  verification_note: z
+    .string()
+    .trim()
+    .min(10, 'Ghi rõ kết quả kiểm tra, ít nhất 10 ký tự.')
+    .max(500, 'Ghi chú tối đa 500 ký tự.'),
+})
+export type AttachMqttForm = z.infer<typeof attachMqttFormSchema>

@@ -58,7 +58,14 @@ export type DeviceLifecycle = z.infer<typeof deviceLifecycleSchema>
 export const credentialStatusSchema = z.enum(['pending', 'active', 'revoked'])
 export type CredentialStatus = z.infer<typeof credentialStatusSchema>
 
-export const mqttSyncStatusSchema = z.enum(['unknown', 'pending', 'synced', 'failed'])
+// manual_verified: admin xác nhận tài khoản MQTT có sẵn (POST .../mqtt-credentials/attach-existing).
+export const mqttSyncStatusSchema = z.enum([
+  'unknown',
+  'pending',
+  'synced',
+  'failed',
+  'manual_verified',
+])
 export type MqttSyncStatus = z.infer<typeof mqttSyncStatusSchema>
 
 /** Trạng thái lệnh điều khiển (bảng "Trạng thái lệnh" trong docs/LONG_API.md). */
