@@ -17,7 +17,7 @@ ACTION_ALIASES = {
     "user_unlocked": {"user_unlocked"},
     "node_registered": {"node_registered", "REGISTER_DEVICE"},
     "node_assigned": {"node_assigned", "MOVE_DEVICE"},
-    "node_transitioned": {"node_transitioned", "UPDATE_LIFECYCLE"},
+    "node_transitioned": {"node_transitioned","UPDATE_LIFECYCLE","ATTACH_EXISTING_MQTT",},
     "incident_acknowledged": {"incident_acknowledged"},
     "threshold_updated": {"threshold_updated"},
 }
