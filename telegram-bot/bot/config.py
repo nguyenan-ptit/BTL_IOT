@@ -18,6 +18,10 @@ class Config:
     poll_seconds: int = 3
     remind_seconds: int = 10
     db_path: str = "bot.db"
+    web_base_url: str = "https://frontend-iot-web-crm.vercel.app"
+    offline_alert_seconds: int = 60
+    fault_alert_seconds: int = 30
+    monitor_seconds: int = 10
 
 
 def _read_env_file(path: Path) -> dict[str, str]:
@@ -45,4 +49,8 @@ def load(path: Path = ENV_FILE) -> Config:
         poll_seconds=int(env.get("POLL_SECONDS", 3)),
         remind_seconds=int(env.get("REMIND_SECONDS", 10)),
         db_path=env.get("DB_PATH", "bot.db"),
+        web_base_url=env.get("WEB_BASE_URL", "https://frontend-iot-web-crm.vercel.app").rstrip("/"),
+        offline_alert_seconds=int(env.get("OFFLINE_ALERT_SECONDS", 60)),
+        fault_alert_seconds=int(env.get("FAULT_ALERT_SECONDS", 30)),
+        monitor_seconds=int(env.get("MONITOR_SECONDS", 10)),
     )

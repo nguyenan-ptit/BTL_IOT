@@ -18,3 +18,11 @@ def test_luu_doc_lien_ket_va_thong_bao(tmp_path):
     store.delete_link(1)
     assert store.get_link(1) is None
     assert store.notices_for(1) == []
+
+
+def test_luu_trang_thai_canh_bao_thiet_bi(tmp_path):
+    store = Store(str(tmp_path / "bot.db"))
+    store.replace_alerts(5, {"101:offline": (10.0, True), "101:fault:gas": (20.0, False)})
+    assert store.get_alerts(5) == {"101:offline": (10.0, True), "101:fault:gas": (20.0, False)}
+    store.replace_alerts(5, {})
+    assert store.get_alerts(5) == {}

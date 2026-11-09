@@ -37,6 +37,15 @@ Bot phải chạy liên tục thì mới báo được. Dừng bằng Ctrl+C.
 - Có sự cố mới: bot gửi tin kèm nút **Tiếp nhận** và nhắc lại mỗi 10 giây tới khi có người tiếp nhận (trên web hoặc Telegram).
 - Hết cảnh báo: bot gửi tin kèm nút **Đóng sự cố**.
 - `/logout` hoặc nút **Đăng xuất**: ngừng nhận cảnh báo.
+- `/menu`: hiện lại bàn phím menu. Nút "Menu" cạnh ô chat cũng liệt kê đủ các lệnh.
+- `/lichsu` hoặc nút **Lịch sử sự cố**: 10 sự cố gần nhất, ai tiếp nhận, ai đóng.
+- Tin sự cố có nút **Mở trên web** (địa chỉ trong `WEB_BASE_URL`) và dòng "Có cháy thật: gọi 114".
+
+Riêng chủ trọ:
+
+- `/thucoi` hoặc nút **Thử còi**: chọn node, xác nhận, còi và đèn đỏ bật khoảng 3 giây.
+- Báo khi node mất kết nối quá `OFFLINE_ALERT_SECONDS` (mặc định 60 giây) và khi kết nối lại.
+- Báo khi cảm biến lỗi quá `FAULT_ALERT_SECONDS` (mặc định 30 giây) và khi hết lỗi. Không báo lúc MQ-2 đang làm nóng; số đo gas dưới 20 coi là lỗi.
 
 Tài khoản quản trị viên nhận được thông báo nhưng không có nút Tiếp nhận và Đóng, vì backend không cho quản trị viên làm hai việc này.
 

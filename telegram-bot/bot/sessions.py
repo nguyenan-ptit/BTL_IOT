@@ -40,15 +40,16 @@ class Sessions:
             return cached[0]
         return await self._login(link)
 
-    async def call(self, link: Link, method: str, path: str) -> Any:
+    async def call(self, link: Link, method: str, path: str, json: Any = None,
+                   headers: dict[str, str] | None = None) -> Any:
         token = await self._token(link)
         try:
-            return await self.backend.request(method, path, token)
+            return await self.backend.request(method, path, token, json, headers)
         except ApiError as error:
             if error.status != 401:
                 raise
         token = await self._login(link)
-        return await self.backend.request(method, path, token)
+        return await self.backend.request(method, path, token, json, headers)
 
     def forget(self, chat_id: int) -> None:
         self._tokens.pop(chat_id, None)

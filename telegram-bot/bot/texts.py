@@ -98,7 +98,8 @@ def incident_alert(incident: dict, now: datetime, reminder: bool = False) -> str
     head = "🔁 NHẮC LẠI" if reminder else "🔥 CẢNH BÁO"
     return (
         f"{head}: {room_name(incident['roomName'])} phát hiện {_signs(incident)}\n"
-        f"Từ {clock(incident['startedAt'], now)} · chưa ai tiếp nhận\n{_measure(incident)}"
+        f"Từ {clock(incident['startedAt'], now)} · chưa ai tiếp nhận\n{_measure(incident)}\n"
+        "Có cháy thật: gọi 114."
     )
 
 
@@ -120,3 +121,70 @@ def incident_recovered(incident: dict, now: datetime) -> str:
 def incident_closed(incident: dict) -> str:
     by = (incident.get("closedBy") or {}).get("displayName")
     return f"☑️ Sự cố {room_name(incident['roomName'])} đã đóng" + (f" bởi {by}." if by else ".")
+
+
+def _history_state(incident: dict) -> str:
+    if incident.get("closedAt"):
+        by = (incident.get("closedBy") or {}).get("displayName")
+        return f"đã đóng bởi {by}" if by else "đã đóng"
+    if incident.get("recoveredAt"):
+        return "đã về bình thường, chờ đóng"
+    people = _people(incident)
+    return f"đã tiếp nhận: {people}" if people else "chưa ai tiếp nhận"
+
+
+def history_message(incidents: list[dict], now: datetime) -> str:
+    if not incidents:
+        return "Chưa có sự cố nào."
+    lines = ["Sự cố gần đây:"]
+    for inc in incidents:
+        lines.append(
+            f"• {room_name(inc['roomName'])} · {_signs(inc)} · {clock(inc['startedAt'], now)}"
+            f" · {_history_state(inc)}"
+        )
+    return "\n".join(lines)
+
+
+SENSOR_NAME = {"gas": "gas/khói", "temperature": "nhiệt độ", "flame": "lửa"}
+
+
+def device_alert(event_kind: str, key: str, room_label: str) -> str:
+    """Tin báo mất kết nối / lỗi cảm biến cho chủ trọ."""
+    parts = key.split(":")
+    if parts[1] == "offline":
+        return (f"⚪ {room_label}: node mất kết nối. Phòng này đang không được giám sát."
+                if event_kind == "down" else f"🟢 {room_label}: node đã kết nối lại.")
+    sensor = SENSOR_NAME.get(parts[2], parts[2])
+    return (f"🟡 {room_label}: cảm biến {sensor} báo lỗi. Kiểm tra dây và nguồn của node."
+            if event_kind == "down" else f"🟢 {room_label}: cảm biến {sensor} đã hoạt động lại.")
+
+
+def help_message(role: str | None) -> str:
+    """Danh sách lệnh theo vai trò; `None` là chưa đăng nhập."""
+    if role is None:
+        return (
+            "Bot báo cháy/gas nhà trọ.\n\n"
+            "/login – đăng nhập bằng tài khoản của website để nhận cảnh báo\n"
+            "/help – xem các lệnh"
+        )
+    lines = [
+        "Các lệnh:",
+        "/phong – tình trạng các phòng của bạn",
+        "/suco – sự cố đang mở",
+        "/lichsu – 10 sự cố gần nhất",
+    ]
+    if role == "landlord":
+        lines.append("/thucoi – thử còi và đèn ở một node")
+    lines += [
+        "/menu – hiện lại bàn phím",
+        "/logout – đăng xuất, ngừng nhận cảnh báo",
+        "/help – xem các lệnh",
+        "",
+        "Có sự cố, bot báo ngay và nhắc lại mỗi 10 giây tới khi có người bấm Tiếp nhận. "
+        "Hết cảnh báo thì bấm Đóng sự cố.",
+    ]
+    if role == "landlord":
+        lines.append("Bot cũng báo khi node mất kết nối hoặc cảm biến lỗi.")
+    if role == "admin":
+        lines.append("Tài khoản quản trị viên chỉ nhận thông báo, không tiếp nhận hay đóng sự cố.")
+    return "\n".join(lines)

@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 
 import httpx
-from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
+from telegram import (BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
                       ReplyKeyboardMarkup, Update)
 from telegram.error import TelegramError
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler, ContextTypes,
@@ -16,6 +16,7 @@ from .backend import ApiError, Backend
 from .config import Config
 from .crypto import encrypt
 from .decide import Action, next_action
+from .monitor import Alert, conditions, step
 from .sessions import NeedsLogin, Sessions
 from .store import Link, Notice, Store
 
@@ -24,10 +25,30 @@ log = logging.getLogger("bot")
 BTN_ROOMS = "Tình trạng phòng"
 BTN_INCIDENTS = "Sự cố đang mở"
 BTN_LOGOUT = "Đăng xuất"
-MENU = ReplyKeyboardMarkup(
-    [[KeyboardButton(BTN_ROOMS), KeyboardButton(BTN_INCIDENTS)], [KeyboardButton(BTN_LOGOUT)]],
-    resize_keyboard=True,
-)
+BTN_HISTORY = "Lịch sử sự cố"
+BTN_BUZZER = "Thử còi"
+COMMANDS = [
+    BotCommand("help", "Xem các lệnh"),
+    BotCommand("menu", "Hiện menu"),
+    BotCommand("phong", "Tình trạng phòng"),
+    BotCommand("suco", "Sự cố đang mở"),
+    BotCommand("lichsu", "Lịch sử sự cố"),
+    BotCommand("thucoi", "Thử còi và đèn (chủ trọ)"),
+    BotCommand("login", "Đăng nhập bằng tài khoản website"),
+    BotCommand("logout", "Đăng xuất"),
+]
+
+
+def menu_for(role: str) -> ReplyKeyboardMarkup:
+    """Bàn phím luôn hiện dưới ô chat. Chủ trọ có thêm nút thử còi."""
+    second = [KeyboardButton(BTN_HISTORY)]
+    if role == "landlord":
+        second.append(KeyboardButton(BTN_BUZZER))
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton(BTN_ROOMS), KeyboardButton(BTN_INCIDENTS)], second,
+         [KeyboardButton(BTN_LOGOUT)]],
+        resize_keyboard=True, is_persistent=True,
+    )
 ASK_USERNAME, ASK_PASSWORD = range(2)
 OUTAGE_NOTIFY_S = 120
 
@@ -41,12 +62,16 @@ def _deps(context: ContextTypes.DEFAULT_TYPE) -> tuple[Config, Store, Backend, S
     return d["config"], d["store"], d["backend"], d["sessions"]
 
 
-def _ack_button(incident_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Tiếp nhận", callback_data=f"ack:{incident_id}")]])
-
-
-def _close_button(incident_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Đóng sự cố", callback_data=f"close:{incident_id}")]])
+def _incident_buttons(context, incident_id: str, action: str | None) -> InlineKeyboardMarkup:
+    """Nút cho tin sự cố: Tiếp nhận hoặc Đóng sự cố (nếu được phép), và Mở trên web."""
+    config = context.application.bot_data["config"]
+    rows = []
+    if action == "ack":
+        rows.append([InlineKeyboardButton("Tiếp nhận", callback_data=f"ack:{incident_id}")])
+    elif action == "close":
+        rows.append([InlineKeyboardButton("Đóng sự cố", callback_data=f"close:{incident_id}")])
+    rows.append([InlineKeyboardButton("Mở trên web", url=f"{config.web_base_url}/su-co/{incident_id}")])
+    return InlineKeyboardMarkup(rows)
 
 
 def _can_act(link: Link) -> bool:
@@ -60,10 +85,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     _, store, _, _ = _deps(context)
     link = store.get_link(update.effective_chat.id)
     if link and link.status == "active":
-        await update.message.reply_text(f"Bạn đang đăng nhập là {link.display_name}.", reply_markup=MENU)
+        await update.message.reply_text(
+            f"Bạn đang đăng nhập là {link.display_name}.\n\n{texts.help_message(link.role)}",
+            reply_markup=menu_for(link.role))
         return
-    await update.message.reply_text(
-        "Bot báo cháy/gas nhà trọ. Gõ /login và đăng nhập bằng tài khoản của website để nhận cảnh báo.")
+    await update.message.reply_text(texts.help_message(None))
+
+
+async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    _, store, _, _ = _deps(context)
+    link = store.get_link(update.effective_chat.id)
+    active = link is not None and link.status == "active"
+    await update.message.reply_text(texts.help_message(link.role if active else None),
+                                    reply_markup=menu_for(link.role) if active else None)
 
 
 async def login_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -98,11 +132,11 @@ async def login_password(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     store.save_link(Link(chat_id, username, encrypt(config.secret_key, password), user["id"],
                          user.get("displayName") or username, user["role"], "active"))
     sessions.forget(chat_id)
-    note = "" if user["role"] in ("landlord", "tenant") else (
-        "\nTài khoản quản trị viên chỉ nhận thông báo, không tiếp nhận hay đóng sự cố được.")
+    # help_message đã có câu dành cho quản trị viên, nên không thêm ghi chú riêng.
     await context.bot.send_message(
-        chat_id, f"Đã đăng nhập: {user.get('displayName') or username}. Bot sẽ báo khi có sự cố.{note}",
-        reply_markup=MENU)
+        chat_id, f"Đã đăng nhập: {user.get('displayName') or username}. Bot sẽ báo khi có sự cố."
+        f"\n\n{texts.help_message(user['role'])}",
+        reply_markup=menu_for(user["role"]))
     return ConversationHandler.END
 
 
@@ -143,7 +177,7 @@ async def show_rooms(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     except (ApiError, httpx.HTTPError):
         await update.message.reply_text("Không lấy được tình trạng phòng. Thử lại sau.")
         return
-    await update.message.reply_text(texts.rooms_message(statuses, _now()), reply_markup=MENU)
+    await update.message.reply_text(texts.rooms_message(statuses, _now()), reply_markup=menu_for(link.role))
 
 
 async def show_incidents(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -160,14 +194,15 @@ async def show_incidents(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Không lấy được danh sách sự cố. Thử lại sau.")
         return
     if not incidents:
-        await update.message.reply_text("Không có sự cố nào đang mở.", reply_markup=MENU)
+        await update.message.reply_text("Không có sự cố nào đang mở.", reply_markup=menu_for(link.role))
         return
     for incident in incidents:
         if incident["status"] == "open":
-            markup = _ack_button(incident["id"]) if _can_act(link) else None
+            markup = _incident_buttons(context, incident["id"], "ack" if _can_act(link) else None)
             await update.message.reply_text(texts.incident_alert(incident, _now()), reply_markup=markup)
         else:
-            await update.message.reply_text(texts.incident_acknowledged(incident, _now()))
+            await update.message.reply_text(texts.incident_acknowledged(incident, _now()),
+                                            reply_markup=_incident_buttons(context, incident["id"], None))
 
 
 # ---------- Nút bấm ----------
@@ -243,16 +278,17 @@ async def _handle(context, link: Link, incident: dict, store: Store, config: Con
     if action == Action.SEND_NEW:
         if incident["status"] == "open":
             mid = await _send(context, chat, texts.incident_alert(incident, now),
-                              _ack_button(incident["id"]) if _can_act(link) else None)
+                              _incident_buttons(context, incident["id"], "ack" if _can_act(link) else None))
             phase = "open"
         else:
-            mid = await _send(context, chat, texts.incident_acknowledged(incident, now))
+            mid = await _send(context, chat, texts.incident_acknowledged(incident, now),
+                              _incident_buttons(context, incident["id"], None))
             phase = "acknowledged"
         store.save_notice(Notice(chat, incident["id"], phase, mid, time.time()))
     elif action == Action.REMIND:
         await _edit(context, chat, notice.message_id)  # bỏ nút ở tin cũ, chỉ giữ nút ở tin mới nhất
         mid = await _send(context, chat, texts.incident_alert(incident, now, reminder=True),
-                          _ack_button(incident["id"]) if _can_act(link) else None)
+                          _incident_buttons(context, incident["id"], "ack" if _can_act(link) else None))
         store.save_notice(Notice(chat, incident["id"], "open", mid, time.time()))
     elif action == Action.MARK_ACK:
         text = texts.incident_acknowledged(incident, now)
@@ -264,7 +300,7 @@ async def _handle(context, link: Link, incident: dict, store: Store, config: Con
         if notice:
             await _edit(context, chat, notice.message_id)
         mid = await _send(context, chat, texts.incident_recovered(incident, now),
-                          _close_button(incident["id"]) if _can_act(link) else None)
+                          _incident_buttons(context, incident["id"], "close" if _can_act(link) else None))
         store.save_notice(Notice(chat, incident["id"], "recovered", mid, time.time()))
     elif action == Action.MARK_CLOSED:
         text = texts.incident_closed(incident)
@@ -323,6 +359,146 @@ async def poll(context: ContextTypes.DEFAULT_TYPE) -> None:
         state.update(since=None, notified=False)
 
 
+# ---------- Menu, lịch sử, thử còi ----------
+
+async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    link = await _linked(update, context)
+    if link:
+        await update.message.reply_text("Chọn một mục bên dưới.", reply_markup=menu_for(link.role))
+
+
+async def show_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    link = await _linked(update, context)
+    if not link:
+        return
+    _, _, _, sessions = _deps(context)
+    try:
+        page = await sessions.call(link, "GET", "/api/incidents?page=1&pageSize=10")
+    except NeedsLogin:
+        await update.message.reply_text("Mật khẩu đã đổi hoặc tài khoản bị khoá. Gõ /login để đăng nhập lại.")
+        return
+    except (ApiError, httpx.HTTPError):
+        await update.message.reply_text("Không lấy được lịch sử sự cố. Thử lại sau.")
+        return
+    await update.message.reply_text(texts.history_message(page.get("items", []), _now()),
+                                    reply_markup=menu_for(link.role))
+
+
+async def buzzer_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    link = await _linked(update, context)
+    if not link:
+        return
+    if link.role != "landlord":
+        await update.message.reply_text("Chỉ chủ trọ được thử còi và đèn.")
+        return
+    _, _, _, sessions = _deps(context)
+    try:
+        devices = (await sessions.call(link, "GET", "/api/devices")).get("items", [])
+        rooms = await sessions.call(link, "GET", "/api/rooms")
+    except NeedsLogin:
+        await update.message.reply_text("Mật khẩu đã đổi hoặc tài khoản bị khoá. Gõ /login để đăng nhập lại.")
+        return
+    except (ApiError, httpx.HTTPError):
+        await update.message.reply_text("Không lấy được danh sách node. Thử lại sau.")
+        return
+    names = {r["id"]: r["name"] for r in rooms}
+    usable = [d for d in devices if d.get("lifecycle_status") == "active" and d.get("room_id")]
+    if not usable:
+        await update.message.reply_text("Chưa có node nào đang sử dụng trong nhà trọ của bạn.")
+        return
+    buttons = [[InlineKeyboardButton(
+        f"{texts.room_name(names.get(d['room_id'], d['room_id']))} · {d['device_id']}",
+        callback_data=f"buzz:{d['device_id']}")] for d in usable]
+    await update.message.reply_text("Thử còi và đèn ở node nào?", reply_markup=InlineKeyboardMarkup(buttons))
+
+
+async def on_buzz(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    match = re.fullmatch(r"(buzz|buzzgo|buzzno):([A-Za-z0-9_-]{0,32})", query.data or "")
+    if not match:
+        await query.answer()
+        return
+    kind, device_id = match.groups()
+    if kind == "buzzno":
+        await query.answer()
+        await query.edit_message_text("Đã huỷ thử còi.")
+        return
+    if kind == "buzz":
+        await query.answer()
+        await query.edit_message_text(
+            f"Còi và đèn đỏ của node {device_id} sẽ bật khoảng 3 giây. Tiếp tục?",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("Thử ngay", callback_data=f"buzzgo:{device_id}"),
+                InlineKeyboardButton("Huỷ", callback_data="buzzno:"),
+            ]]))
+        return
+    _, store, _, sessions = _deps(context)
+    link = store.get_link(query.message.chat.id)
+    if link is None or link.status != "active" or link.role != "landlord":
+        await query.answer("Chỉ chủ trọ đã đăng nhập mới thử còi được.", show_alert=True)
+        return
+    try:
+        devices = (await sessions.call(link, "GET", "/api/devices")).get("items", [])
+        item = next((d for d in devices if d["device_id"] == device_id), None)
+        data = (item or {}).get("data")
+        if not data:
+            await query.answer("Node chưa gửi dữ liệu nên chưa thử được.", show_alert=True)
+            return
+        result = await sessions.call(
+            link, "POST", f"/api/devices/{device_id}/buzzer-test",
+            json={"expected_boot_id": data["boot_id"],
+                  "expected_seq": (data.get("buzzer_test") or {}).get("command_seq", 0),
+                  "action": "start"},
+            headers={"X-IoT-Request": "1"})
+    except NeedsLogin:
+        await query.answer("Mật khẩu đã đổi hoặc tài khoản bị khoá. Gõ /login.", show_alert=True)
+        return
+    except ApiError as error:
+        await query.answer()
+        await query.edit_message_text(f"Không thử được: {error.message}")
+        return
+    except httpx.HTTPError:
+        await query.answer("Không kết nối được hệ thống. Thử lại.", show_alert=True)
+        return
+    await query.answer("Đã gửi lệnh.")
+    await query.edit_message_text(f"Node {device_id}: {result.get('message', 'Đã gửi lệnh thử còi.')}")
+
+
+# ---------- Theo dõi mất kết nối và lỗi cảm biến (chỉ chủ trọ) ----------
+
+async def _monitor_link(context, link: Link, store: Store, sessions: Sessions, config: Config) -> None:
+    statuses = await sessions.call(link, "GET", "/api/rooms/status")
+    devices = (await sessions.call(link, "GET", "/api/devices")).get("items", [])
+    by_node = {d["device_id"]: d for d in devices}
+    active: set[str] = set()
+    labels: dict[str, str] = {}
+    for st in statuses:
+        node = st.get("node") or {}
+        active |= conditions(st, by_node.get(node.get("id")))
+        labels[st["room"]["id"]] = texts.room_name(st["room"]["name"])
+    saved = {k: Alert(since, notified) for k, (since, notified) in store.get_alerts(link.chat_id).items()}
+    events, state = step(saved, active, time.time(),
+                         {"offline": config.offline_alert_seconds, "fault": config.fault_alert_seconds})
+    for event in events:
+        room_id = event.key.split(":")[0]
+        await _send(context, link.chat_id,
+                    texts.device_alert(event.kind, event.key, labels.get(room_id, f"Phòng {room_id}")))
+    store.replace_alerts(link.chat_id, {k: (a.since, a.notified) for k, a in state.items()})
+
+
+async def monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
+    config, store, _, sessions = _deps(context)
+    for link in store.active_links():
+        if link.role != "landlord":
+            continue
+        try:
+            await _monitor_link(context, link, store, sessions, config)
+        except NeedsLogin:
+            pass  # vòng báo sự cố đã nhắn người dùng đăng nhập lại
+        except (ApiError, httpx.HTTPError) as error:
+            log.warning("Không theo dõi được node cho chat %s: %s", link.chat_id, error)
+
+
 # ---------- Khởi tạo ----------
 
 def build(config: Config) -> Application:
@@ -332,6 +508,8 @@ def build(config: Config) -> Application:
         app.bot_data.update(config=config, store=store, backend=backend,
                             sessions=Sessions(backend, store, config.secret_key))
         app.job_queue.run_repeating(poll, interval=config.poll_seconds, first=2)
+        app.job_queue.run_repeating(monitor, interval=config.monitor_seconds, first=5)
+        await app.bot.set_my_commands(COMMANDS)
 
     app = Application.builder().token(config.telegram_token).post_init(post_init).build()
     app.add_handler(ConversationHandler(
@@ -347,5 +525,14 @@ def build(config: Config) -> Application:
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_ROOMS}$"), show_rooms))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_INCIDENTS}$"), show_incidents))
     app.add_handler(MessageHandler(filters.Regex(f"^{BTN_LOGOUT}$"), logout))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_HISTORY}$"), show_history))
+    app.add_handler(MessageHandler(filters.Regex(f"^{BTN_BUZZER}$"), buzzer_start))
+    app.add_handler(CommandHandler("help", show_help))
+    app.add_handler(CommandHandler("menu", show_menu))
+    app.add_handler(CommandHandler("phong", show_rooms))
+    app.add_handler(CommandHandler("suco", show_incidents))
+    app.add_handler(CommandHandler("lichsu", show_history))
+    app.add_handler(CommandHandler("thucoi", buzzer_start))
+    app.add_handler(CallbackQueryHandler(on_buzz, pattern=r"^buzz"))
     app.add_handler(CallbackQueryHandler(on_button))
     return app

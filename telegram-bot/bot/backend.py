@@ -36,9 +36,11 @@ class Backend:
             raise _error(response)
         return response.json()
 
-    async def request(self, method: str, path: str, token: str) -> Any:
+    async def request(self, method: str, path: str, token: str, json: Any = None,
+                      headers: dict[str, str] | None = None) -> Any:
         response = await self.client.request(
-            method, f"{self.base_url}{path}", headers={"Authorization": f"Bearer {token}"})
+            method, f"{self.base_url}{path}", json=json,
+            headers={**(headers or {}), "Authorization": f"Bearer {token}"})
         if response.status_code >= 400:
             raise _error(response)
         return None if response.status_code == 204 else response.json()

@@ -46,3 +46,39 @@ def test_tin_tinh_trang_phong_khong_vo_khi_thieu_so_do():
 def test_gio_den_phut():
     assert clock("2026-11-09T07:58:37+00:00", NOW) == "14:58"
     assert clock("2026-11-08T16:30:00+00:00", NOW) == "08/11 23:30"
+
+
+INCIDENT = {"id": "7", "roomName": "Phòng 101", "signs": ["gas"], "status": "open",
+            "startedAt": "2026-11-09T07:50:00+00:00", "recoveredAt": None, "closedAt": None,
+            "closedBy": None, "acknowledgements": [],
+            "latestMeasurement": {"gas": 700, "temperature": 30.0, "flame": False}}
+
+
+def test_tin_canh_bao_co_so_114():
+    from bot.texts import incident_alert
+    assert "114" in incident_alert(INCIDENT, NOW)
+    assert "114" in incident_alert(INCIDENT, NOW, reminder=True)
+
+
+def test_tin_lich_su_su_co():
+    from bot.texts import history_message
+    closed = {**INCIDENT, "id": "6", "status": "resolved", "recoveredAt": "2026-11-09T07:55:00+00:00",
+              "closedAt": "2026-11-09T07:56:00+00:00", "closedBy": {"id": "1", "displayName": "Chủ trọ"}}
+    acked = {**INCIDENT, "id": "8", "status": "acknowledged",
+             "acknowledgements": [{"user": {"id": "2", "displayName": "An", "role": "tenant"},
+                                   "at": "2026-11-09T07:51:00+00:00"}]}
+    text = history_message([INCIDENT, acked, closed], NOW)
+    assert "chưa ai tiếp nhận" in text
+    assert "An" in text
+    assert "đóng bởi Chủ trọ" in text
+    assert history_message([], NOW) == "Chưa có sự cố nào."
+
+
+def test_huong_dan_theo_vai_tro():
+    from bot.texts import help_message
+    guest = help_message(None)
+    assert "/login" in guest and "/thucoi" not in guest
+    tenant = help_message("tenant")
+    assert "/phong" in tenant and "/lichsu" in tenant and "/thucoi" not in tenant
+    landlord = help_message("landlord")
+    assert "/thucoi" in landlord and "mất kết nối" in landlord

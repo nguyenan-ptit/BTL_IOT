@@ -37,6 +37,9 @@ class Store:
                 chat_id INTEGER NOT NULL, incident_id TEXT NOT NULL, phase TEXT NOT NULL,
                 message_id INTEGER, last_sent_at REAL NOT NULL,
                 PRIMARY KEY (chat_id, incident_id));
+            CREATE TABLE IF NOT EXISTS device_alerts (
+                chat_id INTEGER NOT NULL, alert_key TEXT NOT NULL, since REAL NOT NULL,
+                notified INTEGER NOT NULL, PRIMARY KEY (chat_id, alert_key));
             """
         )
         self.db.commit()
@@ -71,6 +74,7 @@ class Store:
     def delete_link(self, chat_id: int) -> None:
         self.db.execute("DELETE FROM links WHERE chat_id = ?", (chat_id,))
         self.db.execute("DELETE FROM notices WHERE chat_id = ?", (chat_id,))
+        self.db.execute("DELETE FROM device_alerts WHERE chat_id = ?", (chat_id,))
         self.db.commit()
 
     def get_notice(self, chat_id: int, incident_id: str) -> Notice | None:
@@ -97,4 +101,17 @@ class Store:
     def delete_notice(self, chat_id: int, incident_id: str) -> None:
         self.db.execute("DELETE FROM notices WHERE chat_id = ? AND incident_id = ?",
                         (chat_id, incident_id))
+        self.db.commit()
+
+    # Trạng thái báo mất kết nối / lỗi cảm biến của từng chat (xem bot/monitor.py).
+    def get_alerts(self, chat_id: int) -> dict[str, tuple[float, bool]]:
+        rows = self.db.execute("SELECT alert_key, since, notified FROM device_alerts WHERE chat_id = ?",
+                               (chat_id,)).fetchall()
+        return {key: (since, bool(notified)) for key, since, notified in rows}
+
+    def replace_alerts(self, chat_id: int, alerts: dict[str, tuple[float, bool]]) -> None:
+        self.db.execute("DELETE FROM device_alerts WHERE chat_id = ?", (chat_id,))
+        self.db.executemany(
+            "INSERT INTO device_alerts (chat_id, alert_key, since, notified) VALUES (?,?,?,?)",
+            [(chat_id, key, since, int(notified)) for key, (since, notified) in alerts.items()])
         self.db.commit()
