@@ -230,6 +230,41 @@ class BackendTests(unittest.TestCase):
                         with self.assertRaises(storage.DeviceNotAllowed):
                             storage.save(self.sample())
 
+    def test_alarm_telemetry_persists_and_updates_incident_lifecycle(self):
+        self.db.device()
+        alarm = self.sample(seq=1)
+        alarm["temperature"].update(alarm=True, value_c=65.0)
+        self.assertTrue(storage.save(alarm))
+        incident = self.db.row("SELECT * FROM incidents")
+        self.assertEqual(incident["status"], "open")
+        self.assertEqual(json.loads(incident["trigger_details"])["signs"], ["high_temperature"])
+
+        alarm_again = self.sample(seq=2)
+        alarm_again["temperature"].update(alarm=True, value_c=66.0)
+        storage.save(alarm_again)
+        self.assertEqual(self.db.row("SELECT COUNT(*) AS count FROM incidents")["count"], 1)
+        self.assertEqual(self.db.row("SELECT last_detected_at FROM incidents")["last_detected_at"] is not None, True)
+
+        recovered = self.sample(seq=3)
+        storage.save(recovered)
+        incident = self.db.row("SELECT status, recovered_at FROM incidents")
+        self.assertEqual(incident["status"], "recovered")
+        self.assertIsNotNone(incident["recovered_at"])
+
+    def test_faulted_sensor_does_not_auto_recover_active_incident(self):
+        self.db.device()
+        alarm = self.sample(seq=1)
+        alarm["mq2"].update(alarm=True, adc_raw=100)
+        storage.save(alarm)
+        fault = self.sample(seq=2)
+        fault["system_state"] = "fault"
+        fault["led"] = "yellow"
+        fault["mq2"].update(alarm=False, health="warming_up")
+        storage.save(fault)
+        incident = self.db.row("SELECT status, recovered_at FROM incidents")
+        self.assertEqual(incident["status"], "open")
+        self.assertIsNone(incident["recovered_at"])
+
     def test_duplicate_does_not_change_last_seen_or_version(self):
         self.db.device()
         data = self.sample()

@@ -128,6 +128,60 @@ def _dict(value):
     return value if isinstance(value, dict) else {}
 
 
+def _record_incident(cursor, data, room_id, detected_at):
+    """Create/update an active incident from an accepted alarm telemetry frame."""
+    temperature = _dict(data.get("temperature"))
+    mq2 = _dict(data.get("mq2"))
+    flame = _dict(data.get("flame"))
+    signs = []
+    if mq2.get("alarm") is True:
+        signs.append("gas")
+    if temperature.get("alarm") is True:
+        signs.append("high_temperature")
+    if flame.get("alarm") is True:
+        signs.append("flame")
+
+    cursor.execute(
+        "SELECT incident_id FROM incidents WHERE device_id = %s AND room_id <=> %s "
+        "AND status IN ('open', 'handling') ORDER BY created_at DESC, incident_id DESC LIMIT 1 FOR UPDATE",
+        (data["device_id"], room_id),
+    )
+    active = cursor.fetchone()
+    if signs:
+        alert_type = ",".join(signs)
+        details = json.dumps({"signs": signs}, ensure_ascii=False)
+        message = "Phát hiện cảnh báo: " + ", ".join(signs)
+        if active:
+            cursor.execute(
+                "UPDATE incidents SET alert_type = %s, message = %s, trigger_details = %s, "
+                "last_detected_at = %s WHERE incident_id = %s",
+                (alert_type, message, details, detected_at, active["incident_id"]),
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO incidents (device_id, room_id, alert_type, message, status, trigger_details, "
+                "created_at, last_detected_at) VALUES (%s, %s, %s, %s, 'open', %s, %s, %s)",
+                (data["device_id"], room_id, alert_type, message, details, detected_at, detected_at),
+            )
+        return
+
+    # Do not close an incident while a required sensor is warming up, faulted,
+    # filtering, or reporting a power problem; absence of an alarm is not proof
+    # that the hazard has cleared in those states.
+    required_sensors = [temperature, mq2]
+    if data.get("schema_version", 2) >= 3:
+        required_sensors.append(flame)
+    sensors_clear = all(sensor.get("health") in ("ok", "disabled") for sensor in required_sensors)
+    if data.get("schema_version") in (4, 6):
+        sensors_clear = sensors_clear and flame.get("power_health") == "present"
+    if active and sensors_clear:
+        cursor.execute(
+            "UPDATE incidents SET status = 'recovered', recovered_at = %s "
+            "WHERE device_id = %s AND room_id <=> %s AND status IN ('open', 'handling')",
+            (detected_at, data["device_id"], room_id),
+        )
+
+
 def audit(cursor, user_id, room_id, action, device_id, details, result="success"):
     cursor.execute(
         "INSERT INTO audit_logs (actor_user_id, room_id, action, target_type, target_id, result, details, created_at) "
@@ -176,6 +230,7 @@ def save(data, received_at=None):
                 params.append(data[key])
         cursor.execute("UPDATE devices SET " + ", ".join(updates) + " WHERE device_id = %s",
                        (*params, data["device_id"]))
+        _record_incident(cursor, data, device["room_id"], received)
     return True
 
 
