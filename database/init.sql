@@ -57,7 +57,7 @@ CREATE TABLE devices (
     board_model VARCHAR(64) NULL,
     mqtt_username VARCHAR(64) NOT NULL UNIQUE,
     mqtt_client_id VARCHAR(128) NULL,
-    mqtt_sync_status ENUM('unknown', 'pending', 'synced', 'failed') NOT NULL DEFAULT 'unknown',
+    mqtt_sync_status ENUM('unknown', 'pending', 'synced', 'failed', 'manual_verified') NOT NULL DEFAULT 'unknown',
     mqtt_operation_id CHAR(32) NULL,
     credential_status ENUM('pending', 'active', 'revoked') DEFAULT 'pending',
     lifecycle_status ENUM('registered', 'provisioned', 'active', 'maintenance', 'blocked', 'decommissioned') DEFAULT 'registered',
