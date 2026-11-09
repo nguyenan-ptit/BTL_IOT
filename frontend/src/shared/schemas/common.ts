@@ -42,6 +42,7 @@ export const roomOverallSchema = z.enum([
   'no_device',
   'alarm',
   'maintenance',
+  'blocked',
   'offline',
   'sensor_fault',
   'normal',

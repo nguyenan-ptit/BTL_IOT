@@ -1,6 +1,7 @@
 import {
   CircleCheck,
   CircleDashed,
+  Lock,
   Siren,
   TriangleAlert,
   WifiOff,
@@ -50,6 +51,13 @@ export const roomStatusStyle: Record<RoomOverall, StatusStyle> = {
     pill: 'bg-maintenance-wash text-maintenance-ink ring-1 ring-inset ring-maintenance/40',
     card: 'border-maintenance/50 bg-maintenance-wash',
     dot: 'bg-maintenance',
+  },
+  blocked: {
+    label: roomOverallLabel.blocked,
+    icon: Lock,
+    pill: 'bg-board-100 text-board-900 ring-1 ring-inset ring-board-200',
+    card: 'border-board-200 bg-board-100',
+    dot: 'bg-board-800',
   },
   normal: {
     label: roomOverallLabel.normal,

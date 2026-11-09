@@ -1,4 +1,4 @@
-import { ChevronRight, CircleDashed, Wifi, WifiOff } from 'lucide-react'
+import { ChevronRight, CircleDashed, CircleSlash, Lock, Wifi, WifiOff, Wrench } from 'lucide-react'
 import { Link } from 'react-router'
 import { useDevices } from '@/features/devices/hooks'
 import type { DeviceItem } from '@/features/devices/schemas'
@@ -6,14 +6,16 @@ import { LifecyclePill } from '@/features/nodes/components/NodeBadges'
 import { formatClock } from '@/shared/lib/datetime'
 import { cn } from '@/shared/ui/cn'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
+import { activityOf, type Activity } from '../activity'
 import { useRooms } from '../hooks'
 import { roomNumber } from '@/shared/lib/labels'
 
-type Activity = 'online' | 'offline' | 'never'
-
-function activityOf(item: DeviceItem): Activity {
-  if (item.online) return 'online'
-  return item.device.last_seen_at ? 'offline' : 'never'
+function nodeActivity(item: DeviceItem): Activity {
+  return activityOf({
+    lifecycle: item.lifecycle_status,
+    online: item.online,
+    lastSeenAt: item.device.last_seen_at,
+  })
 }
 
 const activityStyle: Record<Activity, { label: string; icon: typeof Wifi; pill: string }> = {
@@ -32,13 +34,27 @@ const activityStyle: Record<Activity, { label: string; icon: typeof Wifi; pill: 
     icon: CircleDashed,
     pill: 'bg-ground text-ink-soft ring-rule-strong',
   },
+  blocked: { label: 'Tạm khoá', icon: Lock, pill: 'bg-board-100 text-board-900 ring-board-200' },
+  maintenance: {
+    label: 'Đang bảo trì',
+    icon: Wrench,
+    pill: 'bg-maintenance-wash text-maintenance-ink ring-maintenance/40',
+  },
+  retired: {
+    label: 'Ngừng sử dụng',
+    icon: CircleSlash,
+    pill: 'bg-ground text-ink-faint ring-rule',
+  },
 }
 
-/** "2 node · 1 đang hoạt động · 1 mất kết nối" */
+/** Trạng thái do người quản lý đặt, tag vòng đời bên cạnh sẽ lặp lại nên ẩn đi. */
+const MANAGED: ReadonlySet<Activity> = new Set(['blocked', 'maintenance', 'retired'])
+
+/** "3 node · 1 đang hoạt động · 1 mất kết nối · 1 tạm khoá" */
 function summary(items: DeviceItem[]): string {
   const parts = [`${items.length} node`]
-  for (const a of ['online', 'offline', 'never'] as const) {
-    const n = items.filter((i) => activityOf(i) === a).length
+  for (const a of Object.keys(activityStyle) as Activity[]) {
+    const n = items.filter((i) => nodeActivity(i) === a).length
     if (n) parts.push(`${n} ${activityStyle[a].label.toLowerCase()}`)
   }
   return parts.join(' · ')
@@ -76,7 +92,7 @@ export function AdminNodeOverview({ now }: { now: Date }) {
             {[...items]
               .sort((a, b) => a.device_id.localeCompare(b.device_id, 'vi', { numeric: true }))
               .map((item) => {
-                const state = activityOf(item)
+                const state = nodeActivity(item)
                 const activity = activityStyle[state]
                 const ActivityIcon = activity.icon
                 const lastSeen = item.device.last_seen_at
@@ -114,7 +130,7 @@ export function AdminNodeOverview({ now }: { now: Date }) {
                           <ActivityIcon aria-hidden className="size-4" />
                           {activity.label}
                         </span>
-                        <LifecyclePill lifecycle={item.lifecycle_status} />
+                        {!MANAGED.has(state) && <LifecyclePill lifecycle={item.lifecycle_status} />}
                       </div>
                       <p className="tabular text-xs text-ink-soft">
                         {lastSeen

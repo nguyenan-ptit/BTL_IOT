@@ -11,8 +11,11 @@ import { isFault, sensorViews } from './sensors'
 export function computeRoomOverall(
   status: RoomStatus,
   telemetry: Telemetry | null = null,
+  /** Phòng có node đang bị khoá (/api/rooms/status không trả node bị khoá). */
+  blockedNode = false,
 ): RoomOverall {
   const { node } = status
+  if (!node && blockedNode) return 'blocked'
   if (!node || node.lifecycle === 'registered' || node.lifecycle === 'retired') return 'no_device'
   if (status.activeIncidentId !== null || status.hazardSigns.length > 0) return 'alarm'
   if (node.lifecycle === 'maintenance') return 'maintenance'
@@ -26,6 +29,7 @@ const ORDER: RoomOverall[] = [
   'offline',
   'sensor_fault',
   'maintenance',
+  'blocked',
   'normal',
   'no_device',
 ]
@@ -36,5 +40,17 @@ export function sortRooms<T extends { overall: RoomOverall; status: RoomStatus }
     (a, b) =>
       ORDER.indexOf(a.overall) - ORDER.indexOf(b.overall) ||
       a.status.room.name.localeCompare(b.status.room.name, 'vi', { numeric: true }),
+  )
+}
+
+/** Trạng thái nặng nhất trong một nhóm phòng (để tô thẻ nhà trọ). */
+export function worstOverall(list: RoomOverall[]): RoomOverall {
+  return ORDER.find((o) => list.includes(o)) ?? 'no_device'
+}
+
+/** Số phòng theo từng trạng thái, theo thứ tự ưu tiên; bỏ trạng thái không có phòng nào. */
+export function countByOverall(list: RoomOverall[]): [RoomOverall, number][] {
+  return ORDER.map((o) => [o, list.filter((x) => x === o).length] as [RoomOverall, number]).filter(
+    ([, n]) => n > 0,
   )
 }

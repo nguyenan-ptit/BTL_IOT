@@ -1,4 +1,14 @@
-import { Flame, Hourglass, Thermometer, TriangleAlert, WifiOff, Wind } from 'lucide-react'
+import {
+  Flame,
+  Hourglass,
+  Info,
+  Lock,
+  Thermometer,
+  TriangleAlert,
+  WifiOff,
+  Wind,
+  Wrench,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 import { formatClock } from '@/shared/lib/datetime'
 import { hazardSignLabel, roomNumber } from '@/shared/lib/labels'
@@ -85,13 +95,72 @@ function sensorNote(sensor: SensorView): string | null {
 }
 
 /** Chân thẻ: bên trái là node, bên phải là lúc nhận số đo gần nhất. */
-function footer(status: RoomStatus, offline: boolean, now: Date): { node: string; when: string } {
+function footer(
+  status: RoomStatus,
+  offline: boolean,
+  now: Date,
+  blockedNodeId: string | null,
+): { node: string; when: string } {
   const node = status.node
+  if (!node && blockedNodeId) return { node: blockedNodeId, when: 'Tạm khoá' }
   if (!node) return { node: 'Chưa gắn node', when: '' }
   if (node.lifecycle === 'registered') return { node: node.code, when: 'Chưa kích hoạt' }
   if (!node.lastSeenAt) return { node: node.code, when: 'Chưa gửi dữ liệu' }
   const at = formatClock(node.lastSeenAt, now)
   return { node: node.code, when: offline ? `Mất tín hiệu từ ${at}` : `Nhận lúc ${at}` }
+}
+
+type Line = { text: string; tone: string; icon: typeof Lock }
+
+/** Điều quan trọng nhất cần nói thêm về phòng, theo thứ tự ưu tiên; `null` khi không có gì. */
+function statusLine(v: {
+  status: RoomStatus
+  overall: RoomOverall
+  stale: boolean
+  faultNotes: (string | null)[]
+  warmingNotes: (string | null)[]
+  hasNotice: boolean
+}): Line | null {
+  const { status, overall, stale } = v
+  if (overall === 'blocked') {
+    return {
+      text: 'Node bị quản trị viên tạm khoá, phòng chưa được giám sát',
+      tone: 'text-board-900',
+      icon: Lock,
+    }
+  }
+  if (!status.node) return { text: 'Phòng chưa gắn node', tone: 'text-ink-soft', icon: Info }
+  if (stale) {
+    return {
+      text:
+        overall === 'alarm'
+          ? 'Node mất kết nối, cảnh báo giữ tới khi có số đo mới'
+          : 'Node mất kết nối, số đo là số đo cũ',
+      tone: 'text-offline-ink',
+      icon: WifiOff,
+    }
+  }
+  if (overall === 'alarm' && status.hazardSigns.length > 0 && !v.hasNotice) {
+    return {
+      text: `Phát hiện: ${status.hazardSigns.map((s) => hazardSignLabel[s]).join(', ')}`,
+      tone: 'text-alarm-deep',
+      icon: TriangleAlert,
+    }
+  }
+  if (overall === 'maintenance') {
+    return {
+      text: 'Đang bảo trì, số đo chỉ để tham khảo',
+      tone: 'text-maintenance-ink',
+      icon: Wrench,
+    }
+  }
+  if (v.faultNotes.length > 0) {
+    return { text: v.faultNotes.join('. '), tone: 'text-fault-ink', icon: TriangleAlert }
+  }
+  if (v.warmingNotes.length > 0) {
+    return { text: v.warmingNotes.join('. '), tone: 'text-board-900', icon: Hourglass }
+  }
+  return null
 }
 
 /** Thẻ một phòng trên trang tổng quan (US1). `notice` là tờ sự cố ghim lên thẻ (US2). */
@@ -101,24 +170,29 @@ export function RoomCard({
   overall,
   now,
   notice,
+  blockedNodeId = null,
 }: {
   status: RoomStatus
   sensors: SensorView[]
   overall: RoomOverall
   now: Date
   notice?: ReactNode
+  /** Node của phòng đang bị quản trị viên khoá (không có trong /api/rooms/status). */
+  blockedNodeId?: string | null
 }) {
   const style = roomStatusStyle[overall]
   // Node mất kết nối thì số đo là số đo cũ, kể cả khi phòng đang cảnh báo hoặc bảo trì (lỗi A).
   const stale = status.node?.connectivity === 'offline' && status.node.lastSeenAt !== null
-  const faultNotes = sensors.filter((s) => isFault(s.state)).map(sensorNote)
+  // Không có node đang chạy (chưa gắn, bị khoá) thì backend không có số đo: không phải lỗi cảm biến.
+  const faultNotes = status.node ? sensors.filter((s) => isFault(s.state)).map(sensorNote) : []
   const warmingNotes = sensors.filter((s) => s.state === 'warming_up').map(sensorNote)
-  const foot = footer(status, stale, now)
+  const foot = footer(status, stale, now, blockedNodeId)
+  const line = statusLine({ status, overall, stale, faultNotes, warmingNotes, hasNotice: !!notice })
 
   return (
     <article
       aria-labelledby={`room-${status.room.id}`}
-      className={cn('flex flex-col rounded-[var(--radius-sheet)] border-2', style.card)}
+      className={cn('flex h-full flex-col rounded-[var(--radius-sheet)] border-2', style.card)}
     >
       {notice}
       <div className="flex flex-1 flex-col gap-3 p-4">
@@ -132,33 +206,14 @@ export function RoomCard({
           <StatusPill status={overall} className="shrink-0 whitespace-nowrap" />
         </header>
 
-        {stale && overall !== 'offline' && (
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-offline-ink">
-            <WifiOff aria-hidden className="size-4 shrink-0" />
-            {overall === 'alarm'
-              ? 'Node mất kết nối. Cảnh báo được giữ cho tới khi có số đo mới.'
-              : 'Node mất kết nối, số đo bên dưới là số đo cũ.'}
-          </p>
-        )}
-        {overall === 'alarm' && status.hazardSigns.length > 0 && !notice && (
-          <p className="text-sm font-semibold text-alarm-deep">
-            Phát hiện: {status.hazardSigns.map((s) => hazardSignLabel[s]).join(', ')}
-          </p>
-        )}
-        {faultNotes.length > 0 && overall !== 'maintenance' && (
-          <p className="text-sm font-semibold text-fault-ink">{faultNotes.join('. ')}</p>
-        )}
-        {warmingNotes.length > 0 && !stale && (
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-board-900">
-            <Hourglass aria-hidden className="size-4 shrink-0" />
-            {warmingNotes.join('. ')}
-          </p>
-        )}
-        {overall === 'maintenance' && (
-          <p className="text-sm font-semibold text-maintenance-ink">
-            Node đang bảo trì, số đo chỉ để tham khảo.
-          </p>
-        )}
+        {/* Một dòng cố định cho điều quan trọng nhất, để thẻ không cao lên khi có thêm thông tin. */}
+        <p
+          className={cn('flex h-5 items-center gap-1.5 text-sm font-semibold', line?.tone)}
+          title={line?.text}
+        >
+          {line && <line.icon aria-hidden className="size-4 shrink-0" />}
+          <span className="truncate">{line?.text}</span>
+        </p>
 
         {status.node && (
           <dl className="grid grid-cols-3 gap-2">

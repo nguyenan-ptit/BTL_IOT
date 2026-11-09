@@ -47,6 +47,7 @@ export const roomOverallLabel: Record<RoomOverall, string> = {
   no_device: 'Chưa có thiết bị',
   alarm: 'Cảnh báo',
   maintenance: 'Đang bảo trì',
+  blocked: 'Tạm khoá',
   offline: 'Mất kết nối',
   sensor_fault: 'Lỗi cảm biến',
   normal: 'Bình thường',

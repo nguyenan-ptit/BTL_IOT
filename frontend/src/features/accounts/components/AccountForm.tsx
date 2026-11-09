@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, useWatch, type Resolver } from 'react-hook-form'
 import type { User } from '@/features/auth/schemas'
+import { groupRoomsByHouse } from '@/features/rooms/group'
 import { useBoardingHouses, useRooms } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
 import { roleLabel, roomNumber } from '@/shared/lib/labels'
@@ -148,17 +149,26 @@ export function AccountForm({ user, onDone }: { user?: User; onDone: () => void 
       {role === 'tenant' && (
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-semibold">Phòng được xem</legend>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {rooms.data?.map((r) => (
-              <label key={r.id} className="tabular flex items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  value={r.id}
-                  className="size-5 accent-board-900"
-                  {...form.register('roomIds')}
-                />
-                Phòng {roomNumber(r.name)}
-              </label>
+          <div className="flex flex-col gap-3">
+            {groupRoomsByHouse(rooms.data ?? [], houses.data ?? []).map((group) => (
+              <div key={group.id} className="flex flex-col gap-1.5">
+                <p className="text-xs font-semibold tracking-wide text-ink-soft uppercase">
+                  {group.name}
+                </p>
+                <div className="flex flex-wrap gap-x-5 gap-y-2">
+                  {group.rooms.map((r) => (
+                    <label key={r.id} className="tabular flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        value={r.id}
+                        className="size-5 accent-board-900"
+                        {...form.register('roomIds')}
+                      />
+                      {group.name} · Phòng {roomNumber(r.name)}
+                    </label>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
           {errors.roomIds && (

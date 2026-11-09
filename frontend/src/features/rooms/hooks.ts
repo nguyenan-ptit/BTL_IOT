@@ -53,10 +53,16 @@ export function useRoomOverview() {
     ? sortRooms(
         rooms.data.map((status) => {
           const telemetry = status.node ? telemetryOf(status.node.id) : null
+          // /api/rooms/status không trả node bị khoá; tìm trong /api/devices để hiện "Tạm khoá".
+          const blockedNode =
+            devices.data?.find(
+              (d) => d.room_id === status.room.id && d.lifecycle_status === 'blocked',
+            ) ?? null
           return {
             status,
             sensors: sensorViews(status, telemetry),
-            overall: computeRoomOverall(status, telemetry),
+            overall: computeRoomOverall(status, telemetry, blockedNode !== null),
+            blockedNodeId: blockedNode?.device_id ?? null,
           }
         }),
       )

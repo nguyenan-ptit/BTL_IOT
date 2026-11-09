@@ -2,7 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Copy, Info, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useRooms } from '@/features/rooms/hooks'
+import { groupRoomsByHouse } from '@/features/rooms/group'
+import { useBoardingHouses, useRooms } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
 import { roomNumber } from '@/shared/lib/labels'
 import { Button } from '@/shared/ui/Button'
@@ -67,6 +68,7 @@ function CreatedCard({ tenant, password }: { tenant: CreatedTenant; password: st
 /** Người thuê (chủ trọ): tạo tài khoản người thuê cho phòng thuộc nhà trọ của mình. */
 export default function TenantsPage() {
   const rooms = useRooms()
+  const houses = useBoardingHouses()
   const create = useCreateTenant()
   const [created, setCreated] = useState<{ tenant: CreatedTenant; password: string }[]>([])
   const form = useForm<CreateTenantInput, unknown, CreateTenantForm>({
@@ -127,10 +129,14 @@ export default function TenantsPage() {
                     {...form.register('room_id')}
                   >
                     <option value="">Chọn phòng</option>
-                    {rooms.data?.map((room) => (
-                      <option key={room.id} value={room.id}>
-                        Phòng {roomNumber(room.name)}
-                      </option>
+                    {groupRoomsByHouse(rooms.data ?? [], houses.data ?? []).map((group) => (
+                      <optgroup key={group.id} label={group.name}>
+                        {group.rooms.map((room) => (
+                          <option key={room.id} value={room.id}>
+                            {group.name} · Phòng {roomNumber(room.name)}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </Field>
