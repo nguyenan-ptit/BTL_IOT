@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 from urllib.parse import urlsplit
-
+from app.core.config import settings
 from fastapi import APIRouter, Depends, HTTPException, Path as ApiPath, Query, Request
 
 from app.core.legacy_auth import get_current_user as legacy_get_current_user
@@ -61,9 +61,19 @@ def check_control_request(request: Request):
             def authority(url):
                 return url.scheme, url.hostname, url.port or (443 if url.scheme == "https" else 80)
 
-            allowed = (source.scheme in ("http", "https") and source.path in ("", "/")
-                       and not source.query and not source.fragment and not source.username
-                       and authority(source) == authority(target))
+            allowed = (
+                    source.scheme in ("http", "https")
+                    and bool(source.hostname)
+                    and source.path in ("", "/")
+                    and not source.query
+                    and not source.fragment
+                    and not source.username
+                    and not source.password
+                    and (
+                        authority(source) == authority(target)
+                        or origin in settings.cors_origins
+                    )
+            )
         except ValueError:
             allowed = False
         if not allowed:
