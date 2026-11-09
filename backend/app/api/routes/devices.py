@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi import Path as ApiPath
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool
 
 from app.core.legacy_auth import get_current_user, require_roles, verify_room_access
 from app.db.device_storage import allowed_device, audit, command_history, public_row, session
@@ -63,7 +63,15 @@ class CredentialRequest(StrictBody):
 
 class RetryRequest(StrictBody):
     password: SecretStr | None = Field(default=None, min_length=16, max_length=128)
-
+class AttachExistingMqttRequest(StrictBody):
+    mqtt_username: str = Field(
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+    )
+    connection_checked: StrictBool
+    topic_permissions_checked: StrictBool
+    verification_note: str = Field(min_length=10, max_length=500)
 
 def _manage(cursor, user, device_id, *, allow_retired=False):
     device = allowed_device(cursor, user, device_id, lock=True)
@@ -220,11 +228,19 @@ def update_device_lifecycle(body: LifecycleRequest, request: Request,
             if new not in LIFECYCLE_TRANSITIONS[device["lifecycle_status"]]:
                 raise HTTPException(409, "Chuyển trạng thái vòng đời không hợp lệ.")
             if new == "active":
-                if (device["credential_status"] != "active"
-                        or (device["mqtt_sync_status"] != "synced"
-                            and not _can_resume_backend(cursor, device))):
-                    raise HTTPException(409, "Cần cấp MQTT thành công; chỉ mở lại bằng thông tin cũ "
-                                        "khi có nhật ký tạm dừng từ active và thông tin MQTT giữ nguyên.")
+                if (
+                    device["credential_status"] != "active"
+                    or (
+                        device["mqtt_sync_status"]
+                        not in ("synced", "manual_verified")
+                        and not _can_resume_backend(cursor, device)
+                        )
+                    ):
+                    raise HTTPException(
+                        409,
+                        "Cần cấp MQTT thành công hoặc xác nhận tài khoản có sẵn "
+                        "trước khi kích hoạt.",
+                    )
             updates.append("lifecycle_status = %s")
             params.append(new)
             if new == "active":
@@ -274,3 +290,86 @@ def retry_mqtt(body: RetryRequest, request: Request,
     from app.services.mqtt_lifecycle import run_operation
     password = body.password.get_secret_value() if body.password else None
     return _operation_response(run_operation(request.app.state.emqx_admin, user, device_id, operation_id, password))
+@router.post("/{device_id}/mqtt-credentials/attach-existing")
+def attach_existing_mqtt(
+    body: AttachExistingMqttRequest,
+    request: Request,
+    device_id: str = ApiPath(pattern=ID_PATTERN),
+    user: dict = Depends(require_roles("admin")),
+):
+    if not (
+        body.connection_checked
+        and body.topic_permissions_checked
+    ):
+        raise HTTPException(
+            400,
+            "Cần kiểm tra kết nối và quyền topic trên EMQX trước.",
+        )
+
+    note = body.verification_note.strip()
+    if len(note) < 10:
+        raise HTTPException(422, "Cần ghi rõ kết quả kiểm tra.")
+
+    # Không được dùng tài khoản MQTT của backend cho node.
+    backend_username = request.app.state.config.get("mqtt_username")
+    if body.mqtt_username == backend_username:
+        raise HTTPException(
+            409,
+            "Node phải dùng tài khoản riêng, không dùng tài khoản backend.",
+        )
+
+    with session() as cursor:
+        device = _manage(cursor, user, device_id)
+
+        # Chỉ áp dụng cấp lần đầu cho node mới.
+        if (
+            device["lifecycle_status"] not in ("registered", "provisioned")
+            or device["credential_status"] != "pending"
+            or device["mqtt_sync_status"] != "unknown"
+            or device["mqtt_operation_id"] is not None
+        ):
+            raise HTTPException(
+                409,
+                "Node không ở trạng thái cấp lần đầu. "
+                "Không dùng thao tác này để bỏ qua cấp/thu hồi MQTT dở dang.",
+            )
+
+        if body.mqtt_username != device["mqtt_username"]:
+            raise HTTPException(
+                409,
+                "Username phải khớp tài khoản đã khai báo khi đăng ký node.",
+            )
+
+        cursor.execute(
+            "UPDATE devices "
+            "SET credential_status = 'active', "
+            "lifecycle_status = 'provisioned', "
+            "mqtt_sync_status = 'manual_verified' "
+            "WHERE device_id = %s",
+            (device_id,),
+        )
+
+        audit(
+            cursor,
+            user["user_id"],
+            device["room_id"],
+            "ATTACH_EXISTING_MQTT",
+            device_id,
+            {
+                "mqtt_username": body.mqtt_username,
+                "verification_method": "manual",
+                "connection_checked": True,
+                "topic_permissions_checked": True,
+                "verification_note": note,
+                "summary": "Xác nhận tài khoản MQTT có sẵn cho node",
+            },
+        )
+
+    return {
+        "status": "success",
+        "device_id": device_id,
+        "mqtt_username": body.mqtt_username,
+        "credential_status": "active",
+        "lifecycle_status": "provisioned",
+        "mqtt_sync_status": "manual_verified",
+    }
