@@ -43,9 +43,23 @@ export function sortRooms<T extends { overall: RoomOverall; status: RoomStatus }
   )
 }
 
-/** Trạng thái nặng nhất trong một nhóm phòng (để tô thẻ nhà trọ). */
+/**
+ * Thứ tự cho thẻ nhà trọ: sự cố trước, rồi bình thường. Bảo trì và tạm khoá do admin chủ động đặt,
+ * nên chỉ hiện khi cả nhà không còn phòng nào đang hoạt động.
+ */
+const HOUSE_ORDER: RoomOverall[] = [
+  'alarm',
+  'offline',
+  'sensor_fault',
+  'normal',
+  'maintenance',
+  'blocked',
+  'no_device',
+]
+
+/** Trạng thái đại diện cho một nhóm phòng (để gắn tag thẻ nhà trọ). */
 export function worstOverall(list: RoomOverall[]): RoomOverall {
-  return ORDER.find((o) => list.includes(o)) ?? 'no_device'
+  return HOUSE_ORDER.find((o) => list.includes(o)) ?? 'no_device'
 }
 
 /** Số phòng theo từng trạng thái, theo thứ tự ưu tiên; bỏ trạng thái không có phòng nào. */

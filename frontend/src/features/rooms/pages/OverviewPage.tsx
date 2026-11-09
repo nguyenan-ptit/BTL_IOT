@@ -91,7 +91,7 @@ function RoomOverview({ now }: { now: Date }) {
           showHouses ? (
             <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {houseList.map((house) => (
-                <li key={house.id}>
+                <li key={house.id} className="min-w-0">
                   <HouseCard
                     name={house.name}
                     overalls={(items ?? [])
@@ -111,8 +111,8 @@ function RoomOverview({ now }: { now: Date }) {
               {shown?.map(({ status, sensors, overall, blockedNodeId }) => {
                 const incident = active.data?.find((i) => i.id === status.activeIncidentId)
                 return (
-                  <li key={status.room.id} className="flex">
-                    <div className="flex-1">
+                  <li key={status.room.id} className="flex min-w-0">
+                    <div className="min-w-0 flex-1">
                       <RoomCard
                         status={status}
                         sensors={sensors}

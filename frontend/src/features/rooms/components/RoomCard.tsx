@@ -192,11 +192,14 @@ export function RoomCard({
   return (
     <article
       aria-labelledby={`room-${status.room.id}`}
-      className={cn('flex h-full flex-col rounded-[var(--radius-sheet)] border-2', style.card)}
+      className={cn(
+        'flex h-full min-w-0 flex-col rounded-[var(--radius-sheet)] border-2',
+        style.card,
+      )}
     >
       {notice}
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        <header className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+        <header className="flex min-w-0 items-center justify-between gap-3">
           <h2
             id={`room-${status.room.id}`}
             className="tabular truncate text-xl font-bold tracking-tight"
@@ -208,11 +211,11 @@ export function RoomCard({
 
         {/* Một dòng cố định cho điều quan trọng nhất, để thẻ không cao lên khi có thêm thông tin. */}
         <p
-          className={cn('flex h-5 items-center gap-1.5 text-sm font-semibold', line?.tone)}
+          className={cn('flex h-5 min-w-0 items-center gap-1.5 text-sm font-semibold', line?.tone)}
           title={line?.text}
         >
           {line && <line.icon aria-hidden className="size-4 shrink-0" />}
-          <span className="truncate">{line?.text}</span>
+          <span className="min-w-0 truncate">{line?.text}</span>
         </p>
 
         {status.node && (
