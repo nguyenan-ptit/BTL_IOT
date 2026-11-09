@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://bent-issues-analysis-conference.trycloudflare.com/api/:path*"
+      "destination": "https://commission-mrs-bytes-additionally.trycloudflare.com/api/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

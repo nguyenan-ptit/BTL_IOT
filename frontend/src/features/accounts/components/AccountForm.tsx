@@ -134,6 +134,11 @@ export function AccountForm({ user, onDone }: { user?: User; onDone: () => void 
               {h.name}
             </label>
           ))}
+          {!editing && (
+            <p className="text-sm text-ink-soft">
+              Có thể để trống rồi giao nhà trọ sau ở trang Nhà trọ &amp; phòng.
+            </p>
+          )}
           {errors.boardingHouseIds && (
             <p className="text-sm font-medium text-alarm-deep">{errors.boardingHouseIds.message}</p>
           )}

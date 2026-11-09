@@ -1,5 +1,6 @@
 import {
   BellRing,
+  Building2,
   ClipboardList,
   Cpu,
   History,
@@ -34,6 +35,7 @@ function useNavItems(): { main: NavItem[]; admin: NavItem[] } {
   const active = useActiveIncidents()
   const openCount = active.data?.filter((i) => i.status === 'open').length ?? 0
   const admin: NavItem[] = []
+  if (role === 'admin') admin.push({ to: '/quan-tri/nha-tro', label: 'Nhà trọ', icon: Building2 })
   if (canManageNodes) admin.push({ to: '/quan-tri/node', label: 'Node', icon: Cpu })
   if (canManageUsers)
     admin.push({ to: '/quan-tri/tai-khoan', label: 'Tài khoản', icon: UsersRound })

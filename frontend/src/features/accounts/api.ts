@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { userSchema, type UserScope } from '@/features/auth/schemas'
 import { request } from '@/shared/api/http'
 import { pageSchema, type Role } from '@/shared/schemas/common'
@@ -31,6 +32,27 @@ export function createUser(body: {
   scope: UserScope
 }) {
   return request('/api/users', userSchema, { method: 'POST', body })
+}
+
+/** Tạo chủ trọ chưa có nhà trọ (chỉ admin). Response khác /api/users nên chỉ kiểm tra tối thiểu. */
+export function createLandlordWithoutHouse(body: {
+  username: string
+  displayName: string
+  password: string
+}) {
+  return request(
+    '/api/accounts/landlords',
+    z.looseObject({ user: z.looseObject({ id: z.number(), username: z.string() }) }),
+    {
+      method: 'POST',
+      body: {
+        username: body.username,
+        password: body.password,
+        display_name: body.displayName,
+        boarding_house_ids: [],
+      },
+    },
+  )
 }
 
 export function updateUser(

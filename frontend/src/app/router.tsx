@@ -19,6 +19,7 @@ const AccountListPage = lazy(() => import('@/features/accounts/pages/AccountList
 const AuditLogPage = lazy(() => import('@/features/audit/pages/AuditLogPage'))
 const ThresholdsPage = lazy(() => import('@/features/thresholds/pages/ThresholdsPage'))
 const TenantsPage = lazy(() => import('@/features/tenants/pages/TenantsPage'))
+const HousesPage = lazy(() => import('@/features/houses/pages/HousesPage'))
 
 function page(node: ReactNode) {
   return <Suspense fallback={<p role="status">Đang tải…</p>}>{node}</Suspense>
@@ -59,6 +60,10 @@ export const router = createBrowserRouter([
             path: 'quan-tri',
             element: <AdminLayout />,
             children: [
+              {
+                path: 'nha-tro',
+                element: <RequireRole roles={['admin']}>{page(<HousesPage />)}</RequireRole>,
+              },
               { path: 'node', element: guarded('nodes:manage', <NodeListPage />) },
               { path: 'node/:id', element: guarded('nodes:manage', <NodeDetailPage />) },
               { path: 'tai-khoan', element: guarded('users:manage', <AccountListPage />) },
