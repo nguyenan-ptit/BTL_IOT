@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.access import can_access_room
 from app.core.dependencies import get_current_user
 from app.db.session import get_db
+from app.core.audit import write_audit
 from app.models.boarding_house import BoardingHouse
 from app.models.incident import Incident
 from app.models.measurement import Measurement
@@ -14,6 +16,7 @@ from app.models.node import Node
 from app.models.room import Room
 from app.models.user import User
 from app.models.user_scope import UserScope
+from app.schemas.rooms import BoardingHouseCreateRequest, RoomCreateRequest
 
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
@@ -88,6 +91,38 @@ def get_rooms(
     return result
 
 
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_room(
+    payload: RoomCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    house = db.query(BoardingHouse).filter(BoardingHouse.id == payload.boardingHouseId).first()
+    if house is None:
+        raise HTTPException(404, {"code": "NOT_FOUND", "message": "Không tìm thấy nhà trọ."})
+    if current_user.role != "admin" and not (
+        current_user.role == "landlord" and house.landlord_id == current_user.id
+    ):
+        raise HTTPException(403, {"code": "FORBIDDEN", "message": "Bạn không có quyền quản lý nhà trọ này."})
+    room_id = payload.id.strip()
+    if db.query(Room).filter(Room.id == room_id).first():
+        raise HTTPException(409, {"code": "ROOM_ID_TAKEN", "message": "Mã phòng đã tồn tại."})
+    room = Room(id=room_id, boarding_house_id=house.id, name=payload.name.strip())
+    try:
+        db.add(room)
+        db.flush()
+        write_audit(db, actor_id=current_user.id, action="room_created", target_type="room",
+                    target_id=room.id, summary=f"Tạo phòng {room.name} tại nhà {house.name}", room_id=room.id)
+        db.commit()
+        return _public_room(room)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, {"code": "ROOM_ID_TAKEN", "message": "Mã phòng đã tồn tại."}) from exc
+    except Exception:
+        db.rollback()
+        raise
+
+
 @router.get("/status")
 def get_room_statuses(
     boardingHouseId: str | None = Query(default=None),
@@ -160,6 +195,39 @@ def get_boarding_houses(
             (UserScope.ended_at.is_(None)) | (UserScope.ended_at > now),
         ).distinct().order_by(BoardingHouse.id).all()
     return [{"id": str(house.id), "name": house.name, "landlordId": str(house.landlord_id)} for house in houses]
+
+
+@houses_router.post("", status_code=status.HTTP_201_CREATED)
+def create_boarding_house(
+    payload: BoardingHouseCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role == "landlord":
+        landlord_id = current_user.id
+        if payload.landlordId is not None and payload.landlordId != current_user.id:
+            raise HTTPException(403, {"code": "FORBIDDEN", "message": "Không thể tạo nhà cho tài khoản khác."})
+    elif current_user.role == "admin":
+        landlord_id = payload.landlordId
+        if landlord_id is None:
+            raise HTTPException(422, {"code": "VALIDATION_ERROR", "message": "Cần chọn tài khoản landlord."})
+        landlord = db.query(User).filter(User.id == landlord_id, User.role == "landlord").first()
+        if landlord is None:
+            raise HTTPException(422, {"code": "INVALID_LANDLORD", "message": "Tài khoản landlord không hợp lệ."})
+    else:
+        raise HTTPException(403, {"code": "FORBIDDEN", "message": "Bạn không có quyền thêm nhà trọ."})
+    house = BoardingHouse(landlord_id=landlord_id, name=payload.name.strip(), address=payload.address or None)
+    try:
+        db.add(house)
+        db.flush()
+        write_audit(db, actor_id=current_user.id, action="boarding_house_created", target_type="house",
+                    target_id=house.id, summary=f"Tạo nhà trọ {house.name}")
+        db.commit()
+        return {"id": str(house.id), "name": house.name, "landlordId": str(house.landlord_id),
+                "address": house.address}
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("/{room_id}")

@@ -6,6 +6,7 @@ firmware/**/mqtt_ca.h
 backend/settings.local.json
 backend/*.crt
 backend/*.pem
+backend/certs
 backend/mqtt_passwords.local
 mosquitto-handover.local.conf
 mqtt_passwords
@@ -32,7 +33,6 @@ build/
 *.o
 *.exe
 *.bak
-
 # Local runtime data
 *.db
 *.db-*
