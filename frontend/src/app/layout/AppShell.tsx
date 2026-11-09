@@ -7,6 +7,7 @@ import {
   LayoutGrid,
   LogOut,
   SlidersHorizontal,
+  UserPlus,
   UsersRound,
   WifiOff,
 } from 'lucide-react'
@@ -28,6 +29,8 @@ function useNavItems(): { main: NavItem[]; admin: NavItem[] } {
   const canManageUsers = usePermission('users:manage')
   const canReadAudit = usePermission('audit:read')
   const canManageThresholds = usePermission('thresholds:manage')
+  const role = useCurrentUser().data?.role
+  const isLandlord = role === 'landlord'
   const active = useActiveIncidents()
   const openCount = active.data?.filter((i) => i.status === 'open').length ?? 0
   const admin: NavItem[] = []
@@ -39,10 +42,12 @@ function useNavItems(): { main: NavItem[]; admin: NavItem[] } {
     main: [
       { to: '/', label: 'Tổng quan', icon: LayoutGrid, end: true },
       { to: '/su-co', label: 'Sự cố', icon: BellRing, badge: openCount },
-      { to: '/lich-su', label: 'Lịch sử', icon: History },
+      // Quản trị viên không xem số đo của phòng.
+      ...(role !== 'admin' ? [{ to: '/lich-su', label: 'Lịch sử', icon: History }] : []),
       ...(canManageThresholds
         ? [{ to: '/nguong-canh-bao', label: 'Ngưỡng', icon: SlidersHorizontal }]
         : []),
+      ...(isLandlord ? [{ to: '/nguoi-thue', label: 'Người thuê', icon: UserPlus }] : []),
     ],
     admin,
   }

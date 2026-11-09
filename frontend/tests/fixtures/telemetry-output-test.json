@@ -1,0 +1,62 @@
+{
+  "schema_version": 6,
+  "test": true,
+  "device_id": "demo_room_101",
+  "room": "101",
+  "boot_id": "0123456789abcdef",
+  "seq": 3,
+  "uptime_s": 604,
+  "system_state": "normal",
+  "led": "red_blink",
+  "buzzer_cmd": true,
+  "temperature": {
+    "value_c": 28.5,
+    "health": "ok",
+    "alarm": false
+  },
+  "mq2": {
+    "mode": "analog",
+    "do_level": null,
+    "adc_raw": 42,
+    "adc_on": 60,
+    "adc_off": 55,
+    "health": "ok",
+    "alarm": false,
+    "diagnostics": "limited_analog",
+    "warmup_remaining_s": 0
+  },
+  "flame": {
+    "do_level": 1,
+    "health": "ok",
+    "alarm": false,
+    "alarm_level": 0,
+    "diagnostics": "limited_do",
+    "power_adc": null,
+    "power_mode": "digital_d1",
+    "power_level": 1,
+    "power_health": "present",
+    "power_adc_min": null,
+    "power_adc_zero": null
+  },
+  "network": {
+    "wifi": true,
+    "mqtt": true
+  },
+  "limits": {
+    "temperature_on_c": 60.0,
+    "temperature_off_c": 55.0
+  },
+  "remote_config": {
+    "version": 1,
+    "revision": 0,
+    "last_request_id": ""
+  },
+  "buzzer_test": {
+    "version": 2,
+    "command_seq": 1,
+    "last_request_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "status": "running",
+    "active": true,
+    "remaining_ms": 2500
+  }
+}

@@ -11,7 +11,7 @@ import { useCurrentUser } from '@/features/auth/hooks'
 import type { User } from '@/features/auth/schemas'
 import { useBoardingHouses, useRooms } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
-import { roleLabel } from '@/shared/lib/labels'
+import { roleLabel, roomNumber } from '@/shared/lib/labels'
 import { roleSchema } from '@/shared/schemas/common'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/ui/cn'
@@ -62,7 +62,7 @@ export default function AccountListPage() {
     }
     return (
       u.scope.roomIds
-        .map((id) => `Phòng ${rooms.data?.find((r) => r.id === id)?.name ?? id}`)
+        .map((id) => `Phòng ${roomNumber(rooms.data?.find((r) => r.id === id)?.name ?? id)}`)
         .join(', ') || 'Chưa gán'
     )
   }

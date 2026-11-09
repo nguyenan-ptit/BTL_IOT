@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { telemetrySchema, type HistorySample } from '@/features/devices/schemas'
 import { buildHistory, HISTORY_LIMIT } from '@/features/history/api'
-import normal from '../../../examples/telemetry-normal.json'
+import normal from '../fixtures/telemetry-normal.json'
 
 const data = telemetrySchema.parse(normal)
 

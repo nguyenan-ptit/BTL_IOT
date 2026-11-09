@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter } from 'react-router'
 import { IncidentAlert } from '@/features/incidents/components/IncidentAlert'
 import type { Permission } from '@/features/auth/schemas'
-import { ForbiddenPage, RequireAuth, RequirePermission } from './guards'
+import { ForbiddenPage, RequireAuth, RequirePermission, RequireRole } from './guards'
 import { AdminLayout } from './layout/AdminLayout'
 import { AppShell } from './layout/AppShell'
 import { RootLayout } from './layout/RootLayout'
@@ -18,6 +18,7 @@ const NodeDetailPage = lazy(() => import('@/features/nodes/pages/NodeDetailPage'
 const AccountListPage = lazy(() => import('@/features/accounts/pages/AccountListPage'))
 const AuditLogPage = lazy(() => import('@/features/audit/pages/AuditLogPage'))
 const ThresholdsPage = lazy(() => import('@/features/thresholds/pages/ThresholdsPage'))
+const TenantsPage = lazy(() => import('@/features/tenants/pages/TenantsPage'))
 
 function page(node: ReactNode) {
   return <Suspense fallback={<p role="status">Đang tải…</p>}>{node}</Suspense>
@@ -43,8 +44,17 @@ export const router = createBrowserRouter([
           { index: true, element: page(<OverviewPage />) },
           { path: 'su-co', element: page(<IncidentListPage />) },
           { path: 'su-co/:id', element: page(<IncidentDetailPage />) },
-          { path: 'lich-su', element: page(<HistoryPage />) },
+          {
+            path: 'lich-su',
+            element: (
+              <RequireRole roles={['landlord', 'tenant']}>{page(<HistoryPage />)}</RequireRole>
+            ),
+          },
           { path: 'nguong-canh-bao', element: guarded('thresholds:manage', <ThresholdsPage />) },
+          {
+            path: 'nguoi-thue',
+            element: <RequireRole roles={['landlord']}>{page(<TenantsPage />)}</RequireRole>,
+          },
           {
             path: 'quan-tri',
             element: <AdminLayout />,

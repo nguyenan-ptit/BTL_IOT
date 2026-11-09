@@ -1,10 +1,12 @@
+import { useCurrentUser } from '@/features/auth/hooks'
 import { IncidentNotice } from '@/features/incidents/components/IncidentNotice'
 import { useActiveIncidents } from '@/features/incidents/hooks'
 import { useNow } from '@/shared/lib/useNow'
-import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
-import { RoomCard } from '../components/RoomCard'
-import { useBoardingHouses, useRoomStatuses } from '../hooks'
 import type { RoomOverall } from '@/shared/schemas/common'
+import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
+import { AdminNodeOverview } from '../components/AdminNodeOverview'
+import { RoomCard } from '../components/RoomCard'
+import { useBoardingHouses, useRoomOverview } from '../hooks'
 
 const SUMMARY: [RoomOverall, string][] = [
   ['alarm', 'đang cảnh báo'],
@@ -25,12 +27,11 @@ function summary(rooms: { overall: RoomOverall }[]): string {
   return parts.join(' · ')
 }
 
-/** Trang tổng quan (US1): trạng thái mới nhất của mọi phòng trong phạm vi người dùng. */
-export default function OverviewPage() {
-  const rooms = useRoomStatuses()
+/** Tổng quan của chủ trọ và người thuê (US1): trạng thái mới nhất của mọi phòng trong phạm vi. */
+function RoomOverview({ now }: { now: Date }) {
+  const { query, items } = useRoomOverview()
   const houses = useBoardingHouses()
   const active = useActiveIncidents()
-  const now = useNow(1_000)
   const houseName = houses.data?.length === 1 ? houses.data[0]?.name : undefined
 
   return (
@@ -38,13 +39,12 @@ export default function OverviewPage() {
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold tracking-tight">{houseName ?? 'Tổng quan phòng'}</h1>
         <p className="text-sm text-ink-soft" aria-live="polite">
-          {rooms.data ? summary(rooms.data) : 'Đang tải trạng thái phòng…'}
-          <span className="hidden sm:inline"> · Tự cập nhật mỗi 3 giây</span>
+          {items ? summary(items) : 'Đang tải trạng thái phòng…'}
         </p>
       </header>
 
       <DataState
-        query={rooms}
+        query={query}
         isEmpty={(data) => data.length === 0}
         skeleton={
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -59,26 +59,36 @@ export default function OverviewPage() {
           </EmptyState>
         }
       >
-        {(data) => (
+        {() => (
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {data.map(({ status, overall }) => (
-              <li key={status.room.id} className="flex">
-                <div className="flex-1">
-                  <RoomCard
-                    status={status}
-                    overall={overall}
-                    now={now}
-                    notice={(() => {
-                      const incident = active.data?.find((i) => i.id === status.activeIncidentId)
-                      return incident ? <IncidentNotice incident={incident} now={now} /> : undefined
-                    })()}
-                  />
-                </div>
-              </li>
-            ))}
+            {items?.map(({ status, sensors, overall }) => {
+              const incident = active.data?.find((i) => i.id === status.activeIncidentId)
+              return (
+                <li key={status.room.id} className="flex">
+                  <div className="flex-1">
+                    <RoomCard
+                      status={status}
+                      sensors={sensors}
+                      overall={overall}
+                      now={now}
+                      notice={
+                        incident ? <IncidentNotice incident={incident} now={now} /> : undefined
+                      }
+                    />
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </DataState>
     </div>
   )
+}
+
+/** Trang tổng quan: quản trị viên xem trạng thái node, các vai trò khác xem phòng và số đo. */
+export default function OverviewPage() {
+  const { data: user } = useCurrentUser()
+  const now = useNow(30_000)
+  return user?.role === 'admin' ? <AdminNodeOverview now={now} /> : <RoomOverview now={now} />
 }

@@ -10,17 +10,17 @@ import {
 } from '@/features/devices/schemas'
 import { useRooms } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
-import { formatDateTime } from '@/shared/lib/datetime'
+import { formatClock, formatDateTime } from '@/shared/lib/datetime'
 import { Button } from '@/shared/ui/Button'
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { inputClass } from '@/shared/ui/Field'
 import { Sheet } from '@/shared/ui/Sheet'
-import { MqttCredentialPanel } from '../components/MqttCredentialPanel'
 import { ConnectivityText, LifecyclePill } from '../components/NodeBadges'
 import { useChangeLifecycle, useMoveNode, useNodeCommands } from '../hooks'
 import { maintenanceNoteSchema, toNodeListItem } from '../schemas'
 import { allowedTargets, transitionLabel } from '../transitions'
+import { roomNumber } from '@/shared/lib/labels'
 
 function errorText(error: unknown): string {
   return isApiError(error) ? error.message : 'Chưa lưu được. Kiểm tra mạng rồi thử lại.'
@@ -125,7 +125,7 @@ export default function NodeDetailPage() {
                             {!node.roomId && <option value="">Chưa gán</option>}
                             {rooms.data?.map((room) => (
                               <option key={room.id} value={room.id}>
-                                Phòng {room.name}
+                                Phòng {roomNumber(room.name)}
                               </option>
                             ))}
                           </select>
@@ -150,7 +150,7 @@ export default function NodeDetailPage() {
                     )}
                     <p className="text-sm text-ink-soft">
                       Nhận dữ liệu gần nhất:{' '}
-                      {node.lastSeenAt ? formatDateTime(node.lastSeenAt) : 'chưa có'}
+                      {node.lastSeenAt ? formatClock(node.lastSeenAt) : 'chưa có'}
                     </p>
                     {node.lifecycle === 'maintenance' && node.maintenanceNote && (
                       <p className="text-sm">Ghi chú bảo trì: {node.maintenanceNote}</p>
@@ -204,7 +204,7 @@ export default function NodeDetailPage() {
                       <p className="text-ink-soft">
                         {retired
                           ? 'Node đã ngừng sử dụng. Chỉ còn xem lịch sử.'
-                          : 'Cấp tài khoản MQTT trước khi kích hoạt.'}
+                          : 'Node cần được cấp tài khoản MQTT trước khi kích hoạt.'}
                       </p>
                     ) : (
                       targets.map((t) => (
@@ -231,7 +231,8 @@ export default function NodeDetailPage() {
                     )}
                     {node.lifecycle === 'registered' && (
                       <p className="text-sm text-ink-soft">
-                        Node mới đăng ký cần được cấp tài khoản MQTT rồi mới kích hoạt được.
+                        Node mới đăng ký cần được cấp tài khoản MQTT (qua backend) rồi mới kích hoạt
+                        được.
                       </p>
                     )}
                     {lifecycle.error && (
@@ -245,7 +246,6 @@ export default function NodeDetailPage() {
                       </p>
                     )}
                   </Sheet>
-                  <MqttCredentialPanel node={node} />
                 </aside>
               </div>
 
@@ -264,7 +264,7 @@ export default function NodeDetailPage() {
                   <p>
                     Thao tác này <strong className="text-ink">không hoàn tác được</strong>. Hệ thống
                     thu hồi tài khoản MQTT của node; nếu EMQX chưa xử lý xong, node vẫn bị chặn ở
-                    backend và có thể thử lại ở mục Tài khoản MQTT. Lịch sử vẫn được giữ.
+                    backend. Lịch sử vẫn được giữ.
                   </p>
                 )}
                 {target === 'blocked' && (

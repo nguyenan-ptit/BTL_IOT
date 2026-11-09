@@ -8,7 +8,7 @@ import { useDevices } from '@/features/devices/hooks'
 import { deviceLifecycleSchema, type DeviceLifecycle } from '@/features/devices/schemas'
 import { useRooms } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
-import { formatDateTime } from '@/shared/lib/datetime'
+import { formatClock } from '@/shared/lib/datetime'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/ui/cn'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
@@ -24,6 +24,7 @@ import {
   type RegisterNodeInput,
 } from '../schemas'
 import { credentialLabel, deviceLifecycleLabel } from '../transitions'
+import { roomNumber } from '@/shared/lib/labels'
 
 const EMPTY_FORM: RegisterNodeInput = {
   device_id: '',
@@ -59,8 +60,8 @@ function RegisterNodeSheet({ onDone }: { onDone: () => void }) {
     <Sheet className="flex flex-col gap-4 p-4 sm:p-5">
       <h2 className="text-lg font-bold">Đăng ký node mới</h2>
       <p className="text-sm text-ink-soft">
-        Đăng ký chỉ ghi node vào hệ thống. Sau đó cấp tài khoản MQTT ở trang chi tiết node, nạp vào
-        ESP, rồi mới kích hoạt.
+        Đăng ký chỉ ghi node vào hệ thống. Node cần được cấp tài khoản MQTT và nạp vào ESP rồi mới
+        kích hoạt được.
       </p>
       <form
         noValidate
@@ -86,7 +87,7 @@ function RegisterNodeSheet({ onDone }: { onDone: () => void }) {
             <option value="">Chọn phòng</option>
             {rooms.data?.map((room) => (
               <option key={room.id} value={room.id}>
-                Phòng {room.name}
+                Phòng {roomNumber(room.name)}
               </option>
             ))}
           </select>
@@ -233,7 +234,7 @@ export default function NodeListPage() {
                         </td>
                         <td className="tabular px-4 py-3">
                           {node.roomName ? (
-                            `Phòng ${node.roomName}`
+                            `Phòng ${roomNumber(node.roomName)}`
                           ) : (
                             <span className="text-ink-faint">Chưa gán</span>
                           )}
@@ -251,7 +252,7 @@ export default function NodeListPage() {
                             !node.lastSeenAt && 'text-ink-faint',
                           )}
                         >
-                          {node.lastSeenAt ? formatDateTime(node.lastSeenAt) : 'Chưa có'}
+                          {node.lastSeenAt ? formatClock(node.lastSeenAt) : 'Chưa có'}
                         </td>
                       </tr>
                     ))}

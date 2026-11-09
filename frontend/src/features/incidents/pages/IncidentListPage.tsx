@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Link } from 'react-router'
 import { useRooms } from '@/features/rooms/hooks'
 import { formatDateTime, formatTime } from '@/shared/lib/datetime'
-import { incidentStatusLabel } from '@/shared/lib/labels'
+import { incidentStatusLabel, roomNumber } from '@/shared/lib/labels'
 import { incidentStatusSchema, type IncidentStatus } from '@/shared/schemas/common'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/ui/cn'
@@ -78,7 +78,7 @@ export default function IncidentListPage() {
             <option value="">Tất cả phòng</option>
             {rooms.data?.map((room) => (
               <option key={room.id} value={room.id}>
-                Phòng {room.name}
+                Phòng {roomNumber(room.name)}
               </option>
             ))}
           </select>
@@ -178,12 +178,17 @@ export default function IncidentListPage() {
                   <Link
                     to={`/su-co/${incident.id}`}
                     className={cn(
-                      'grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 rounded-[var(--radius-sheet)] border bg-sheet p-4 hover:border-board-800 md:grid-cols-[7rem_10rem_1fr_auto] md:items-center',
-                      incident.status === 'open' ? 'border-alarm border-2' : 'border-rule',
+                      'grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 rounded-[var(--radius-sheet)] p-4 hover:border-board-800 md:grid-cols-[7rem_10rem_1fr_auto] md:items-center',
+                      // Chưa kết thúc thì làm nổi: chưa ai tiếp nhận đậm nhất, đã tiếp nhận nhạt hơn.
+                      incident.status === 'open'
+                        ? 'border-2 border-alarm bg-alarm-wash'
+                        : incident.status === 'acknowledged'
+                          ? 'border-2 border-alarm/50 bg-sheet'
+                          : 'border border-rule bg-sheet',
                     )}
                   >
                     <span className="tabular text-lg font-bold md:order-1">
-                      Phòng {incident.roomName}
+                      Phòng {roomNumber(incident.roomName)}
                     </span>
                     <span className="justify-self-end md:order-4">
                       <IncidentStatusPill status={incident.status} />

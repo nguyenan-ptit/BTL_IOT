@@ -5,6 +5,7 @@ import { Button, type ButtonProps } from '@/shared/ui/Button'
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog'
 import { useAcknowledge } from '../hooks'
 import type { Incident } from '../schemas'
+import { roomNumber } from '@/shared/lib/labels'
 
 /**
  * Nút "Tiếp nhận" có bước xác nhận (FR-014). Ẩn khi người dùng đã tiếp nhận hoặc sự cố đã kết thúc.
@@ -58,8 +59,8 @@ export function AcknowledgeButton({
         open={open}
         title={
           resolved
-            ? `Sự cố phòng ${incident.roomName} vừa kết thúc`
-            : `Tiếp nhận sự cố phòng ${incident.roomName}?`
+            ? `Sự cố phòng ${roomNumber(incident.roomName)} vừa kết thúc`
+            : `Tiếp nhận sự cố phòng ${roomNumber(incident.roomName)}?`
         }
         confirmLabel={resolved ? 'Đóng' : 'Tiếp nhận'}
         confirmVariant={resolved ? 'secondary' : 'stamp'}

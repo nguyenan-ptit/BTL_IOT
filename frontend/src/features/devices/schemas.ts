@@ -20,6 +20,8 @@ export const telemetrySchema = z.looseObject({
     adc_off: z.number().int(),
     health: z.string(),
     alarm: z.boolean(),
+    // Số giây MQ-2 còn làm nóng; 0 khi đã sẵn sàng.
+    warmup_remaining_s: z.number().int().nullable().optional(),
   }),
   flame: z.looseObject({
     health: z.string(),

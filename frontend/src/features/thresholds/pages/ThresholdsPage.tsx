@@ -7,6 +7,7 @@ import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { FormDialog } from '@/shared/ui/FormDialog'
 import { DeviceControlCard } from '../components/DeviceControlCard'
 import { ThresholdForm } from '../components/ThresholdForm'
+import { roomNumber } from '@/shared/lib/labels'
 
 /** Còn lệnh chờ ESP thì hỏi lại nhanh hơn để thấy kết quả sớm. */
 function hasWaitingCommand(items: DeviceItem[] | undefined) {
@@ -71,7 +72,7 @@ export default function ThresholdsPage() {
 
       <FormDialog
         open={editing !== null}
-        title={`Ngưỡng phòng ${editing ? roomName(editing.room_id) : ''}`}
+        title={`Ngưỡng phòng ${editing ? roomNumber(roomName(editing.room_id)) : ''}`}
         onClose={() => setEditing(null)}
       >
         {editing?.data && (
