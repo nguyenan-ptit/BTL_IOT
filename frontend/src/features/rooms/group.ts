@@ -1,3 +1,4 @@
+import { roomNumber } from '@/shared/lib/labels'
 import type { BoardingHouse, Room } from './schemas'
 
 export type HouseGroup<R> = { id: string; name: string; rooms: R[] }
@@ -30,4 +31,18 @@ export function groupRoomsByHouse<R extends Pick<Room, 'id' | 'boardingHouseId' 
       const unknownB = !houses.some((h) => h.id === b.id)
       return Number(unknownA) - Number(unknownB) || byName(a.name, b.name)
     })
+}
+
+/** Mã phòng → "Nhà A · Phòng 101": dùng ở mọi chỗ hiện phòng ngoài bối cảnh một nhà cụ thể. */
+export function roomLabelMap(
+  rooms: Pick<Room, 'id' | 'boardingHouseId' | 'name'>[],
+  houses: BoardingHouse[],
+): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const group of groupRoomsByHouse(rooms, houses)) {
+    for (const room of group.rooms) {
+      map.set(room.id, `${group.name} · Phòng ${roomNumber(room.name)}`)
+    }
+  }
+  return map
 }

@@ -9,9 +9,9 @@ import {
 import { useState } from 'react'
 import { useCurrentUser } from '@/features/auth/hooks'
 import type { User } from '@/features/auth/schemas'
-import { useBoardingHouses, useRooms } from '@/features/rooms/hooks'
+import { useBoardingHouses, useRoomLabels } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
-import { roleLabel, roomNumber } from '@/shared/lib/labels'
+import { roleLabel } from '@/shared/lib/labels'
 import { roleSchema } from '@/shared/schemas/common'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/ui/cn'
@@ -46,7 +46,7 @@ export default function AccountListPage() {
   })
   const { data: me } = useCurrentUser()
   const houses = useBoardingHouses()
-  const rooms = useRooms()
+  const roomLabels = useRoomLabels()
   const setLocked = useSetLocked()
   const [editing, setEditing] = useState<User | 'new' | null>(null)
   const [locking, setLocking] = useState<User | null>(null)
@@ -60,11 +60,7 @@ export default function AccountListPage() {
           .join(', ') || 'Chưa gán'
       )
     }
-    return (
-      u.scope.roomIds
-        .map((id) => `Phòng ${roomNumber(rooms.data?.find((r) => r.id === id)?.name ?? id)}`)
-        .join(', ') || 'Chưa gán'
-    )
+    return u.scope.roomIds.map((id) => roomLabels.label(id)).join(', ') || 'Chưa gán'
   }
 
   return (

@@ -2,12 +2,11 @@ import { useState } from 'react'
 import { currentThresholds, isWaiting } from '@/features/devices/adapters'
 import { useDevices } from '@/features/devices/hooks'
 import type { DeviceItem } from '@/features/devices/schemas'
-import { LIVE_REFETCH_MS, useRooms } from '@/features/rooms/hooks'
+import { LIVE_REFETCH_MS, useRoomLabels } from '@/features/rooms/hooks'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { FormDialog } from '@/shared/ui/FormDialog'
 import { DeviceControlCard } from '../components/DeviceControlCard'
 import { ThresholdForm } from '../components/ThresholdForm'
-import { roomNumber } from '@/shared/lib/labels'
 
 /** Còn lệnh chờ ESP thì hỏi lại nhanh hơn để thấy kết quả sớm. */
 function hasWaitingCommand(items: DeviceItem[] | undefined) {
@@ -27,11 +26,8 @@ export default function ThresholdsPage() {
   const devices = useDevices({
     refetchInterval: (items) => (hasWaitingCommand(items) ? 2_000 : LIVE_REFETCH_MS),
   })
-  const rooms = useRooms()
+  const roomName = useRoomLabels().label
   const [editing, setEditing] = useState<DeviceItem | null>(null)
-
-  const roomName = (roomId: string | null) =>
-    rooms.data?.find((r) => r.id === roomId)?.name ?? roomId ?? '—'
 
   return (
     <div className="flex flex-col gap-5">
@@ -72,7 +68,7 @@ export default function ThresholdsPage() {
 
       <FormDialog
         open={editing !== null}
-        title={`Ngưỡng phòng ${editing ? roomNumber(roomName(editing.room_id)) : ''}`}
+        title={`Ngưỡng · ${editing ? roomName(editing.room_id) : ''}`}
         onClose={() => setEditing(null)}
       >
         {editing?.data && (

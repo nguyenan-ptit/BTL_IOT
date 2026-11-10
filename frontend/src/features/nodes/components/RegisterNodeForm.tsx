@@ -1,12 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { useRooms } from '@/features/rooms/hooks'
+import { useRoomLabels } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
-import { roomNumber } from '@/shared/lib/labels'
 import { Button } from '@/shared/ui/Button'
 import { Field, inputClass, TextInput } from '@/shared/ui/Field'
 import { useRegisterNode } from '../hooks'
 import { registerNodeFormSchema, type RegisterNodeBody, type RegisterNodeInput } from '../schemas'
+import { RoomOptions } from '@/features/rooms/components/RoomOptions'
 
 const EMPTY_FORM: RegisterNodeInput = {
   device_id: '',
@@ -31,7 +31,7 @@ export function RegisterNodeForm({
   /** Gọi với mã node khi đăng ký xong, không có tham số khi bấm Hủy. */
   onDone: (registeredId?: string) => void
 }) {
-  const rooms = useRooms()
+  const rooms = useRoomLabels()
   const register = useRegisterNode()
   const initial = { ...EMPTY_FORM, room_id: presetRoomId ?? '' }
   const form = useForm<RegisterNodeInput, unknown, RegisterNodeBody>({
@@ -73,11 +73,7 @@ export function RegisterNodeForm({
       {presetRoomId ? (
         <Field id="node-room-fixed" label="Phòng">
           {/* Phòng chọn sẵn: hiện tên ở ô chỉ đọc, giá trị gửi đi nằm ở ô ẩn. */}
-          <TextInput
-            id="node-room-fixed"
-            readOnly
-            value={`Phòng ${roomNumber(rooms.data?.find((r) => r.id === presetRoomId)?.name ?? presetRoomId)}`}
-          />
+          <TextInput id="node-room-fixed" readOnly value={rooms.label(presetRoomId)} />
           <input type="hidden" {...form.register('room_id')} />
         </Field>
       ) : (
@@ -89,11 +85,7 @@ export function RegisterNodeForm({
             {...form.register('room_id')}
           >
             <option value="">Chọn phòng</option>
-            {rooms.data?.map((room) => (
-              <option key={room.id} value={room.id}>
-                Phòng {roomNumber(room.name)}
-              </option>
-            ))}
+            <RoomOptions groups={rooms.groups} />
           </select>
         </Field>
       )}

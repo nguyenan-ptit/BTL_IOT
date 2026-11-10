@@ -19,7 +19,7 @@ function themeColor(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(`--color-${name}`).trim()
 }
 
-type Point = { t: number; gas: number | null; temperature: number | null }
+type Point = { t: number; gas: number | null; temperature: number | null; backfill: boolean }
 
 export function HistoryChart({
   measurements,
@@ -36,6 +36,7 @@ export function HistoryChart({
       grid: themeColor('rule'),
       axis: themeColor('ink-faint'),
       alarm: themeColor('alarm'),
+      sheet: themeColor('sheet'),
     }),
     [],
   )
@@ -43,7 +44,9 @@ export function HistoryChart({
     t: Date.parse(m.measuredAt),
     gas: m.gas,
     temperature: m.temperature,
+    backfill: m.isBackfill,
   }))
+  const hasBackfill = points.some((p) => p.backfill)
   const first = points[0]?.t ?? 0
   const last = points[points.length - 1]?.t ?? 0
   const sameDay = formatDate(new Date(first)) === formatDate(new Date(last))
@@ -64,6 +67,12 @@ export function HistoryChart({
           <span aria-hidden className="w-5 border-t-2 border-dashed border-ink-soft" />
           Nhiệt độ °C (trục phải)
         </span>
+        {hasBackfill && (
+          <span className="flex items-center gap-2">
+            <span aria-hidden className="size-2.5 rounded-full border-2 border-ink bg-sheet" />
+            Số đo gửi bù
+          </span>
+        )}
         {thresholds && (
           <span className="flex items-center gap-2">
             <span aria-hidden className="w-5 border-t-2 border-dotted border-alarm" />
@@ -151,7 +160,22 @@ export function HistoryChart({
               strokeWidth={2}
               isAnimationActive={false}
               connectNulls={false}
-              dot={false}
+              // Chấm rỗng đánh dấu số đo gửi bù (đo lúc mất mạng, nhận sau).
+              dot={(props: { cx?: number; cy?: number; payload?: Point; index?: number }) =>
+                props.payload?.backfill && props.cx !== undefined && props.cy !== undefined ? (
+                  <circle
+                    key={props.index}
+                    cx={props.cx}
+                    cy={props.cy}
+                    r={3.5}
+                    fill={colors.sheet}
+                    stroke={colors.gas}
+                    strokeWidth={2}
+                  />
+                ) : (
+                  <g key={props.index} />
+                )
+              }
             />
             <Line
               yAxisId="temp"

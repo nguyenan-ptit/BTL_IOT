@@ -1,4 +1,4 @@
-import { useRoomStatuses } from '@/features/rooms/hooks'
+import { useBoardingHouses, useRoomStatuses } from '@/features/rooms/hooks'
 import { cn } from '@/shared/ui/cn'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { inputClass } from '@/shared/ui/Field'
@@ -8,7 +8,8 @@ import { HistoryChart } from '../components/HistoryChart'
 import { HistoryTable } from '../components/HistoryTable'
 import { customRange, RANGE_OPTIONS, useHistoryFilters, type RangeOption } from '../filters'
 import { useMeasurements } from '../hooks'
-import { roomNumber } from '@/shared/lib/labels'
+import { RoomOptions } from '@/features/rooms/components/RoomOptions'
+import { groupRoomsByHouse } from '@/features/rooms/group'
 
 const rangeLabel: Record<RangeOption, string> = {
   'gan-nhat': `${HISTORY_LIMIT} mẫu gần nhất`,
@@ -22,6 +23,7 @@ const rangeLabel: Record<RangeOption, string> = {
 export default function HistoryPage() {
   const [filters, setFilters] = useHistoryFilters()
   const rooms = useRoomStatuses()
+  const houses = useBoardingHouses()
   const statuses = rooms.data?.map((r) => r.status)
   const selected = statuses?.find((s) => s.room.id === filters.phong) ?? statuses?.[0]
   const deviceId = selected?.node?.id ?? null
@@ -42,15 +44,16 @@ export default function HistoryPage() {
           </label>
           <select
             id="history-room"
-            className={cn(inputClass, 'lg:w-40')}
+            className={cn(inputClass, 'lg:w-72')}
             value={selected?.room.id ?? ''}
             onChange={(e) => void setFilters({ phong: e.target.value })}
           >
-            {statuses?.map((s) => (
-              <option key={s.room.id} value={s.room.id}>
-                Phòng {roomNumber(s.room.name)}
-              </option>
-            ))}
+            <RoomOptions
+              groups={groupRoomsByHouse(
+                (statuses ?? []).map((s) => s.room),
+                houses.data ?? [],
+              )}
+            />
           </select>
         </div>
 

@@ -47,25 +47,28 @@ export default function AuditLogPage() {
         <fieldset>
           <legend className="mb-2 text-sm font-semibold">Loại thao tác</legend>
           <div className="flex flex-wrap gap-2">
-            {auditActionSchema.options.map((a) => {
-              const on = filters.loai.includes(a)
-              return (
-                <button
-                  key={a}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() =>
-                    void setFilters({
-                      loai: on ? filters.loai.filter((x) => x !== a) : [...filters.loai, a],
-                      trang: 1,
-                    })
-                  }
-                  className="h-9 rounded-full bg-sheet px-3.5 text-sm font-semibold ring-1 ring-rule-strong ring-inset hover:bg-board-100 aria-pressed:bg-board-900 aria-pressed:text-white aria-pressed:ring-board-900"
-                >
-                  {auditActionLabel[a]}
-                </button>
-              )
-            })}
+            {/* Không có chip lọc "Đổi ngưỡng cảnh báo" (đã bỏ theo yêu cầu). */}
+            {auditActionSchema.options
+              .filter((a) => a !== 'threshold_updated')
+              .map((a) => {
+                const on = filters.loai.includes(a)
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      void setFilters({
+                        loai: on ? filters.loai.filter((x) => x !== a) : [...filters.loai, a],
+                        trang: 1,
+                      })
+                    }
+                    className="h-9 rounded-full bg-sheet px-3.5 text-sm font-semibold ring-1 ring-rule-strong ring-inset hover:bg-board-100 aria-pressed:bg-board-900 aria-pressed:text-white aria-pressed:ring-board-900"
+                  >
+                    {auditActionLabel[a]}
+                  </button>
+                )
+              })}
           </div>
         </fieldset>
         <div className="flex flex-wrap items-end gap-3">

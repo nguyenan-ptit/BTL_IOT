@@ -7,7 +7,6 @@ import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/ui/cn'
 import type { ThresholdValues } from '../schemas'
 import { BuzzerTestButton } from './BuzzerTestButton'
-import { roomNumber } from '@/shared/lib/labels'
 
 function Pair({ label, on, off }: { label: string; on: string; off: string }) {
   return (
@@ -72,7 +71,7 @@ export function DeviceControlCard({
   return (
     <li className="flex flex-col gap-4 rounded-[var(--radius-sheet)] border border-rule bg-sheet p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="tabular text-xl font-bold">Phòng {roomNumber(roomName)}</h2>
+        <h2 className="tabular min-w-0 truncate text-xl font-bold">{roomName}</h2>
         <span className="text-sm text-ink-soft">Node {item.device_id}</span>
         <span
           className={cn(

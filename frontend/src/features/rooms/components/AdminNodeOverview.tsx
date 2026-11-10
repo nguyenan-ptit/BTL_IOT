@@ -7,8 +7,7 @@ import { formatClock } from '@/shared/lib/datetime'
 import { cn } from '@/shared/ui/cn'
 import { DataState, EmptyState, Skeleton } from '@/shared/ui/DataState'
 import { activityOf, type Activity } from '../activity'
-import { useRooms } from '../hooks'
-import { roomNumber } from '@/shared/lib/labels'
+import { useRoomLabels } from '../hooks'
 
 function nodeActivity(item: DeviceItem): Activity {
   return activityOf({
@@ -66,9 +65,7 @@ function summary(items: DeviceItem[]): string {
  */
 export function AdminNodeOverview({ now }: { now: Date }) {
   const devices = useDevices()
-  const rooms = useRooms()
-  const roomName = (id: string | null) =>
-    id ? `Phòng ${roomNumber(rooms.data?.find((r) => r.id === id)?.name ?? id)}` : 'Chưa gán phòng'
+  const roomName = useRoomLabels().label
 
   return (
     <div className="flex flex-col gap-4">

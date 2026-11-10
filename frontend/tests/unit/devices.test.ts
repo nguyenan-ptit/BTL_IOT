@@ -22,7 +22,14 @@ describe('telemetry firmware schema 6', () => {
       room_id: '101',
       data: telemetrySchema.parse(normal),
     })
-    expect(m).toEqual({ measuredAt: at, receivedAt: at, gas: 42, temperature: 28.5, flame: false })
+    expect(m).toEqual({
+      measuredAt: at,
+      receivedAt: at,
+      isBackfill: false,
+      gas: 42,
+      temperature: 28.5,
+      flame: false,
+    })
   })
 
   it('cảm biến không ok thì giá trị là null, không hiện số cũ', () => {
@@ -100,5 +107,30 @@ describe('GET /api/devices', () => {
     }
     const parsed = deviceListSchema.parse(response)
     expect(parsed.items[0]?.data).toBeNull()
+  })
+})
+
+describe('số đo gửi bù', () => {
+  it('dùng giờ đo thật và đánh dấu gửi bù', () => {
+    const m = toMeasurement({
+      received_at: '2026-11-10T03:05:00+00:00',
+      measured_at: '2026-11-10T03:00:00+00:00',
+      is_backfill: true,
+      room_id: '101',
+      data: telemetrySchema.parse({ ...normal, backfill: true }),
+    })
+    expect(m.measuredAt).toBe('2026-11-10T03:00:00+00:00')
+    expect(m.receivedAt).toBe('2026-11-10T03:05:00+00:00')
+    expect(m.isBackfill).toBe(true)
+  })
+
+  it('backend cũ không có measured_at thì giờ đo là giờ nhận, không phải gửi bù', () => {
+    const m = toMeasurement({
+      received_at: at,
+      room_id: '101',
+      data: telemetrySchema.parse(normal),
+    })
+    expect(m.measuredAt).toBe(at)
+    expect(m.isBackfill).toBe(false)
   })
 })

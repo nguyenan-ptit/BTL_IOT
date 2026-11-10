@@ -20,3 +20,13 @@ describe('nhóm phòng theo nhà trọ', () => {
     expect(groups[1]?.rooms.map((r) => r.id)).toEqual(['n2-101'])
   })
 })
+
+describe('nhãn nhà · phòng', () => {
+  it('ghép tên nhà trước tên phòng, phòng không rõ thì dùng mã', async () => {
+    const { roomLabelMap } = await import('@/features/rooms/group')
+    const map = roomLabelMap(rooms, houses)
+    expect(map.get('n1-101')).toBe('Nhà A · Phòng 101')
+    expect(map.get('n2-101')).toBe('Nhà B · Phòng 101')
+    expect(map.get('x-1')).toBe('Nhà #9 · Phòng 1')
+  })
+})

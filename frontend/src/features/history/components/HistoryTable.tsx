@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { formatDateTime } from '@/shared/lib/datetime'
+import { formatDateTime, formatTime } from '@/shared/lib/datetime'
 import { formatInteger, formatTemperature } from '@/shared/lib/number'
 import { Button } from '@/shared/ui/Button'
 import type { Measurement } from '../schemas'
@@ -14,12 +14,12 @@ export function HistoryTable({ measurements }: { measurements: Measurement[] }) 
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-x-auto rounded-[var(--radius-sheet)] border border-rule bg-sheet">
-        <table className="w-full min-w-[32rem] text-sm">
+        <table className="w-full min-w-[40rem] text-sm">
           <caption className="sr-only">Bảng số đo, mới nhất ở trên</caption>
           <thead className="border-b border-rule bg-ground text-left text-ink-soft">
             <tr>
               <th scope="col" className="px-3 py-2 font-semibold">
-                Thời điểm nhận
+                Thời điểm đo
               </th>
               <th scope="col" className="px-3 py-2 text-right font-semibold">
                 Gas/khói
@@ -29,6 +29,9 @@ export function HistoryTable({ measurements }: { measurements: Measurement[] }) 
               </th>
               <th scope="col" className="px-3 py-2 font-semibold">
                 Lửa
+              </th>
+              <th scope="col" className="px-3 py-2 font-semibold">
+                Nguồn
               </th>
             </tr>
           </thead>
@@ -57,6 +60,21 @@ export function HistoryTable({ measurements }: { measurements: Measurement[] }) 
                     <span className="font-semibold text-alarm-deep">Có lửa</span>
                   ) : (
                     'Không'
+                  )}
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap">
+                  {m.isBackfill ? (
+                    <span
+                      className="font-semibold"
+                      title={`Nhận lúc ${formatDateTime(m.receivedAt)}`}
+                    >
+                      Gửi bù
+                      <span className="ml-1 font-normal text-ink-soft">
+                        (nhận {formatTime(m.receivedAt)})
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-ink-faint">Trực tiếp</span>
                   )}
                 </td>
               </tr>

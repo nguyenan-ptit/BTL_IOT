@@ -1,8 +1,8 @@
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Link } from 'react-router'
-import { useRooms } from '@/features/rooms/hooks'
+import { useRoomLabels } from '@/features/rooms/hooks'
 import { formatDateTime, formatTime } from '@/shared/lib/datetime'
-import { incidentStatusLabel, roomNumber } from '@/shared/lib/labels'
+import { incidentStatusLabel } from '@/shared/lib/labels'
 import { incidentStatusSchema, type IncidentStatus } from '@/shared/schemas/common'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/ui/cn'
@@ -14,6 +14,7 @@ import { useIncidentFilters } from '../filters'
 import { signsText } from '../format'
 import { useIncidents } from '../hooks'
 import type { Incident } from '../schemas'
+import { RoomOptions } from '@/features/rooms/components/RoomOptions'
 
 /** Ngày trên ô lọc (yyyy-mm-dd, giờ Việt Nam) đổi sang mốc ISO đầu hoặc cuối ngày. */
 function dayBound(day: string | null, end: boolean): string | null {
@@ -37,7 +38,7 @@ function Acknowledgers({ incident }: { incident: Incident }) {
 /** Danh sách sự cố (US2): chưa tiếp nhận nổi bật trên cùng, lọc theo phòng, tình trạng, ngày. */
 export default function IncidentListPage() {
   const [filters, setFilters] = useIncidentFilters()
-  const rooms = useRooms()
+  const rooms = useRoomLabels()
   const incidents = useIncidents({
     roomId: filters.phong,
     status: filters['tinh-trang'],
@@ -71,16 +72,12 @@ export default function IncidentListPage() {
           </label>
           <select
             id="filter-room"
-            className={cn(inputClass, 'lg:w-40')}
+            className={cn(inputClass, 'lg:w-72')}
             value={filters.phong ?? ''}
             onChange={(e) => void setFilters({ phong: e.target.value || null, trang: 1 })}
           >
             <option value="">Tất cả phòng</option>
-            {rooms.data?.map((room) => (
-              <option key={room.id} value={room.id}>
-                Phòng {roomNumber(room.name)}
-              </option>
-            ))}
+            <RoomOptions groups={rooms.groups} />
           </select>
         </div>
 
@@ -188,7 +185,7 @@ export default function IncidentListPage() {
                     )}
                   >
                     <span className="tabular text-lg font-bold md:order-1">
-                      Phòng {roomNumber(incident.roomName)}
+                      {rooms.label(incident.roomId)}
                     </span>
                     <span className="justify-self-end md:order-4">
                       <IncidentStatusPill status={incident.status} />

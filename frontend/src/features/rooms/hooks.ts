@@ -3,6 +3,7 @@ import { useDevices } from '@/features/devices/hooks'
 import type { Telemetry } from '@/features/devices/schemas'
 import { fetchBoardingHouses, fetchRooms, fetchRoomStatuses, roomKeys } from './api'
 import { computeRoomOverall, sortRooms } from './overall'
+import { groupRoomsByHouse, roomLabelMap } from './group'
 import { sensorViews } from './sensors'
 
 /** Hỏi lại mỗi 3 giây để trạng thái mới lên màn hình trong 5 giây (FR-010, research R3). */
@@ -68,4 +69,19 @@ export function useRoomOverview() {
       )
     : undefined
   return { query: rooms, items }
+}
+
+/** Nhãn "Nhà · Phòng" và nhóm phòng theo nhà, cho ô chọn phòng và danh sách. */
+export function useRoomLabels() {
+  const rooms = useRooms()
+  const houses = useBoardingHouses()
+  const list = rooms.data ?? []
+  const houseList = houses.data ?? []
+  const labels = roomLabelMap(list, houseList)
+  return {
+    groups: groupRoomsByHouse(list, houseList),
+    labels,
+    label: (roomId: string | null | undefined) =>
+      roomId ? (labels.get(roomId) ?? `Phòng ${roomId}`) : 'Chưa gán phòng',
+  }
 }

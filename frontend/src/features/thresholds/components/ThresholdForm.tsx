@@ -6,7 +6,6 @@ import { Field, TextInput } from '@/shared/ui/Field'
 import type { Telemetry } from '@/features/devices/schemas'
 import { useSendThresholds } from '../api'
 import { thresholdFormSchema, type ThresholdValues } from '../schemas'
-import { roomNumber } from '@/shared/lib/labels'
 
 /** Form gửi ngưỡng mới cho một node. Đóng ngay khi backend nhận lệnh; kết quả hiện trên thẻ node. */
 export function ThresholdForm({
@@ -40,9 +39,9 @@ export function ThresholdForm({
     >
       <p className="text-sm text-ink-soft">
         Gửi cho node <span className="font-semibold text-ink">{deviceId}</span> (phòng{' '}
-        <span className="tabular font-semibold text-ink">{roomNumber(roomName)}</span>). Node chỉ
-        dùng ngưỡng mới sau khi ESP xác nhận đã lưu. Cảnh báo bật khi số đo chạm ngưỡng bật và chỉ
-        tắt khi số đo xuống tới ngưỡng tắt.
+        <span className="tabular font-semibold text-ink">{roomName}</span>). Node chỉ dùng ngưỡng
+        mới sau khi ESP xác nhận đã lưu. Cảnh báo bật khi số đo chạm ngưỡng bật và chỉ tắt khi số đo
+        xuống tới ngưỡng tắt.
       </p>
 
       <fieldset className="flex flex-col gap-3">

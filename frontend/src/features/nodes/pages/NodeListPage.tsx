@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useDevices } from '@/features/devices/hooks'
 import { deviceLifecycleSchema, type DeviceLifecycle } from '@/features/devices/schemas'
-import { useRooms } from '@/features/rooms/hooks'
+import { useRoomLabels } from '@/features/rooms/hooks'
 import { formatClock } from '@/shared/lib/datetime'
 import { Button } from '@/shared/ui/Button'
 import { cn } from '@/shared/ui/cn'
@@ -15,7 +15,6 @@ import { ConnectivityText, LifecyclePill } from '../components/NodeBadges'
 import { RegisterNodeForm } from '../components/RegisterNodeForm'
 import { toNodeListItem } from '../schemas'
 import { credentialLabel, deviceLifecycleLabel } from '../transitions'
-import { roomNumber } from '@/shared/lib/labels'
 
 function RegisterNodeSheet({ onDone }: { onDone: (registeredId?: string) => void }) {
   return (
@@ -40,8 +39,7 @@ export default function NodeListPage() {
   const [adding, setAdding] = useState(false)
   const [registered, setRegistered] = useState<string | null>(null)
   const devices = useDevices({ refetchInterval: 10_000 })
-  const rooms = useRooms()
-  const roomNames = new Map(rooms.data?.map((r) => [r.id, r.name]))
+  const roomNames = useRoomLabels().labels
 
   const toggle = (l: DeviceLifecycle) => {
     const cur = filters['trang-thai']
@@ -166,7 +164,7 @@ export default function NodeListPage() {
                         </td>
                         <td className="tabular px-4 py-3">
                           {node.roomName ? (
-                            `Phòng ${roomNumber(node.roomName)}`
+                            node.roomName
                           ) : (
                             <span className="text-ink-faint">Chưa gán</span>
                           )}

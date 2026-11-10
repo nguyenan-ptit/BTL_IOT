@@ -9,6 +9,7 @@ export const telemetrySchema = z.looseObject({
   boot_id: z.string(),
   seq: z.number().int(),
   system_state: z.string(),
+  backfill: z.boolean().optional(),
   temperature: z.looseObject({
     value_c: z.number().nullable(),
     health: z.string(),
@@ -117,6 +118,7 @@ export const deviceRegistrySchema = z.looseObject({
   mqtt_client_id: z.string().nullable(),
   mqtt_sync_status: mqttSyncStatusSchema,
   mqtt_operation_id: z.string().nullable(),
+  board_model: z.string().nullable().optional(),
   hardware_version: z.string().nullable(),
   firmware_version: z.string().nullable(),
   last_seen_at: z.string().nullable(),
@@ -145,7 +147,12 @@ export type DeviceItem = z.infer<typeof deviceItemSchema>
 export const deviceListSchema = z.looseObject({ items: z.array(deviceItemSchema) })
 
 export const historySampleSchema = z.object({
+  /** Giờ backend nhận. */
   received_at: z.string(),
+  /** Giờ đo thật (SNTP trên ESP); backend cũ không có thì coi như giờ nhận. */
+  measured_at: z.string().optional(),
+  /** Mẫu ESP lưu lúc mất mạng rồi gửi lại khi có mạng. */
+  is_backfill: z.boolean().optional(),
   room_id: z.string().nullable(),
   data: telemetrySchema,
 })

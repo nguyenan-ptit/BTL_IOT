@@ -10,14 +10,15 @@ import type {
 
 /**
  * Một mẫu /api/history → số đo của website.
- * Firmware không có giờ thật (chỉ uptime_s), nên giờ đo là giờ backend nhận.
+ * Giờ đo lấy từ `measured_at` (SNTP trên ESP); backend cũ không có thì dùng giờ nhận.
  * Cảm biến có health khác "ok" thì giá trị là null, không hiện số cũ.
  */
 export function toMeasurement(sample: HistorySample): Measurement {
   const { temperature, mq2, flame } = sample.data
   return {
-    measuredAt: sample.received_at,
+    measuredAt: sample.measured_at ?? sample.received_at,
     receivedAt: sample.received_at,
+    isBackfill: sample.is_backfill ?? sample.data.backfill === true,
     gas: mq2.health === 'ok' ? mq2.adc_raw : null,
     temperature: temperature.health === 'ok' ? temperature.value_c : null,
     flame: flame.health === 'ok' ? flame.alarm : null,

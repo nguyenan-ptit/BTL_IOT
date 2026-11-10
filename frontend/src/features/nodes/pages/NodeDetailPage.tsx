@@ -8,7 +8,7 @@ import {
   type CommandStatus,
   type DeviceLifecycle,
 } from '@/features/devices/schemas'
-import { useRooms } from '@/features/rooms/hooks'
+import { useRoomLabels } from '@/features/rooms/hooks'
 import { isApiError } from '@/shared/api/errors'
 import { formatClock, formatDateTime } from '@/shared/lib/datetime'
 import { Button } from '@/shared/ui/Button'
@@ -27,7 +27,7 @@ import {
   mqttSyncLabel,
   transitionLabel,
 } from '../transitions'
-import { roomNumber } from '@/shared/lib/labels'
+import { RoomOptions } from '@/features/rooms/components/RoomOptions'
 
 function errorText(error: unknown): string {
   return isApiError(error) ? error.message : 'Chưa lưu được. Kiểm tra mạng rồi thử lại.'
@@ -45,7 +45,6 @@ function operationNotice(result: unknown): string | null {
 export default function NodeDetailPage() {
   const { id = '' } = useParams()
   const devices = useDevices({ refetchInterval: 5_000 })
-  const rooms = useRooms()
   const commands = useNodeCommands(id)
   const move = useMoveNode(id)
   const lifecycle = useChangeLifecycle(id)
@@ -54,7 +53,8 @@ export default function NodeDetailPage() {
   const [noteError, setNoteError] = useState<string | null>(null)
   const [roomDraft, setRoomDraft] = useState<string | null>(null)
 
-  const roomNames = new Map(rooms.data?.map((r) => [r.id, r.name]))
+  const roomLabels = useRoomLabels()
+  const roomNames = roomLabels.labels
   const item = devices.data?.find((d) => d.device_id === id)
   const notice = operationNotice(lifecycle.data)
 
@@ -130,11 +130,7 @@ export default function NodeDetailPage() {
                             onChange={(e) => setRoomDraft(e.target.value)}
                           >
                             {!node.roomId && <option value="">Chưa gán</option>}
-                            {rooms.data?.map((room) => (
-                              <option key={room.id} value={room.id}>
-                                Phòng {roomNumber(room.name)}
-                              </option>
-                            ))}
+                            <RoomOptions groups={roomLabels.groups} />
                           </select>
                         </div>
                         <Button
@@ -162,6 +158,27 @@ export default function NodeDetailPage() {
                     {node.lifecycle === 'maintenance' && node.maintenanceNote && (
                       <p className="text-sm">Ghi chú bảo trì: {node.maintenanceNote}</p>
                     )}
+                  </Sheet>
+
+                  <Sheet className="flex flex-col gap-3 p-4 sm:p-5">
+                    <h2 className="font-bold">Thông tin node</h2>
+                    <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                      {[
+                        ['Mã node', item.device.device_id],
+                        ['Tên node', item.device.device_name],
+                        ['Phòng', roomLabels.label(node.roomId)],
+                        ['MQTT username', item.device.mqtt_username],
+                        ['MQTT Client ID', item.device.mqtt_client_id],
+                        ['Loại bo mạch', item.device.board_model],
+                        ['Phiên bản phần cứng', item.device.hardware_version],
+                        ['Phiên bản firmware', item.device.firmware_version],
+                      ].map(([label, value]) => (
+                        <div key={label} className="flex min-w-0 flex-col gap-0.5">
+                          <dt className="text-sm text-ink-soft">{label}</dt>
+                          <dd className="tabular font-semibold break-all">{value || '—'}</dd>
+                        </div>
+                      ))}
+                    </dl>
                   </Sheet>
 
                   <section aria-labelledby="node-commands" className="flex flex-col gap-3">
