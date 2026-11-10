@@ -8,7 +8,7 @@ Phần **Nguyễn Văn An** gồm phần cứng/firmware ESP8266, cảm biến, 
 
 | Thư mục | Nội dung |
 | --- | --- |
-| `firmware/node_full/` | Firmware V6 hiện tại, cấu hình mẫu và ngưỡng/thử đầu ra/discovery |
+| `firmware/node_full/` | Firmware V7, telemetry schema 6, cài Wi-Fi và chỉnh ngưỡng/thử đầu ra |
 | `tests/firmware/usb_stability_test/`, `tests/firmware/ds18b20_test/`, `tests/firmware/mq2_test/` | Sketch thử riêng giữ lại từ gói P1 |
 | `hardware/` | Bảng chân, sơ đồ dây, danh sách linh kiện và nơi bổ sung ảnh prototype thật |
 | `docs/` | Bàn giao, hợp đồng MQTT hiện tại, tình trạng kiểm tra và tài liệu P1 lịch sử |
@@ -39,7 +39,18 @@ Tài liệu `docs/telemetry-contract.md` và `docs/progress.md` giữ lại mố
 
 3. Điền Wi-Fi 2,4 GHz, địa chỉ broker, cổng và tài khoản MQTT riêng đã được cấu hình cho node. Đối chiếu username với registry BE; việc đăng ký node chưa tự tạo tài khoản trên EMQX. Để dùng hostname/TLS cloud, làm theo [CLOUD_MQTT](docs/CLOUD_MQTT.md). `127.0.0.1` trên ESP là chính ESP, không phải máy tính.
 4. Với bo phòng 101 dùng `DEVICE_ID="node01"`, `ROOM_ID="101"`; với bo phòng 102 dùng `node02`/`102`. ID phải riêng cho mỗi ESP; phòng đặt theo vị trí thật. Bản V5 trước đây từng dùng `node02`/phòng `101`; cần thống nhất ánh xạ với backend khi đổi và phân biệt dữ liệu lịch sử.
-5. Nạp đúng bo/cổng COM bằng Arduino IDE. Serial 115200 của source hiện tại có marker `NODE_FULL_V6_DEVICE_TOPICS`. Ghi lại marker/ID trên từng bo; việc source biên dịch đạt không chứng minh nó đã được nạp.
+5. Nạp đúng bo/cổng COM bằng Arduino IDE. Serial 115200 của source hiện tại có marker `NODE_FULL_V7_BACKEND_COMPATIBLE`. Ghi lại marker/ID trên từng bo; việc source biên dịch đạt không chứng minh nó đã được nạp.
+
+## Đổi Wi-Fi sau khi nạp firmware
+
+Không cần sửa `config.h` hoặc nạp lại ESP mỗi khi đổi Wi-Fi:
+
+1. Khi ESP đang chạy, giữ nút **FLASH/D3 trong 3 giây**, rồi thả. Có thể gửi `wifi` + Enter qua Serial 115200 để mở cùng chế độ này. Nếu chưa có Wi-Fi hợp lệ, ESP cũng tự mở trang cài đặt.
+2. Dùng điện thoại/máy tính kết nối mạng `IOT-Setup-…`. Mật khẩu cài đặt riêng của từng ESP được in trong Serial khi mở chế độ này; ghi lại một lần để dùng về sau. Đây là mật khẩu mạng cài đặt, khác mật khẩu router và MQTT.
+3. Mở **http://192.168.4.1**, nhập SSID và mật khẩu Wi-Fi **2,4 GHz**, rồi bấm **Kết nối và lưu**.
+4. ESP chỉ lưu vào EEPROM sau khi nhận được IP từ Wi-Fi mới. Khi thành công, mạng cài đặt đóng sau khoảng 15 giây; nếu kết nối thất bại sau khoảng 20 giây, cấu hình đã lưu trước đó vẫn được giữ.
+
+Wi-Fi đã lưu được dùng lại sau mất điện và được ưu tiên hơn Wi-Fi mặc định trong `config.h`. Đổi Wi-Fi giữ nguyên ID thiết bị, phòng, tài khoản broker và ngưỡng đã lưu. Với broker cloud, Wi-Fi mới cần truy cập Internet; với broker LAN, địa chỉ broker phải truy cập được từ mạng mới. Trang cài đặt chỉ mở trong cửa sổ 5 phút và có thể mở lại bằng FLASH/D3.
 
 ## Chạy backend MySQL
 
