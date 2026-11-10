@@ -10,6 +10,8 @@
 // Signed LAN discovery is disabled in TLS mode; there is no plaintext fallback.
 #define MQTT_USE_TLS 0
 
+// Initial fallback only. FLASH/D3 (hold 3s after boot) opens the setup AP;
+// verified Wi-Fi saved there overrides these values across reboots.
 constexpr char WIFI_SSID[] = "CHANGE_ME";
 constexpr char WIFI_PASSWORD[] = "CHANGE_ME";
 // LAN mode: IPv4 broker fallback. TLS mode: exact provider DNS hostname,

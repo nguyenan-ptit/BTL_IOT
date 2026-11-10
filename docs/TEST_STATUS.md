@@ -2,6 +2,17 @@
 
 Đây là bản ghi **theo từng mốc**, không phải trạng thái thiết bị trực tiếp. Các kết quả dưới đây thuộc bản bàn giao firmware; không tính các kiểm tra backend/web vào kết quả do phần firmware cung cấp.
 
+## Khôi phục tương thích backend và giữ cài Wi-Fi — 10/11/2026
+
+- Source marker `NODE_FULL_V7_BACKEND_COMPATIBLE`, phiên bản `node-full-v7-backend-compatible`. Sketch dùng lại parser, bản ghi LittleFS và bộ điều khiển thử đầu ra hiện có; bỏ phụ thuộc header `remote_config_json.h` bị thiếu và tạo topic telemetry theo ID.
+- Lệnh ngưỡng dùng `request_id`, `boot_id`, `expected_revision`, `expires_uptime_s`, `thresholds`. Chỉ áp dụng sau khi lưu/đọc kiểm tra thành công; ACK là `remote_config` trong telemetry. Lệnh thử đầu ra và metadata `buzzer_test.version=2` dùng đúng hợp đồng backend. Không dùng topic ACK/state riêng của bản RAM trước đó.
+- 273 kiểm tra C++ native đạt: 76 ngưỡng/lưu trữ, 129 đầu ra/discovery, 31 hostname/đồng hồ và 37 kiểm tra tích hợp hàng đợi/lưu trữ/metadata/đầu ra mới. Kiểm tra discovery vẫn chỉ kiểm tra helper độc lập.
+- Hai bài kiểm tra cầu nối với backend thật đạt: JSON do controller backend tạo được native firmware xử lý, ACK được backend xác nhận; gồm đổi ngưỡng/khởi động lại và thử còi start/completed/stop. Chỉ thay journal database và transport MQTT, không truy cập dịch vụ đang chạy. Cách chạy ở [tests/README](../tests/README.md#v7-devicebackend-contract-regression).
+- Hàm `makePayload()` lấy từ chính sketch được chạy trong harness native với bốn trạng thái, gồm lúc thử đầu ra, đang chờ số đo sau đổi ngưỡng và giá trị ID/bộ đếm lớn nhất. Cả bốn JSON được validator backend chấp nhận.
+- Bốn biến thể build đạt trên NodeMCU/core 3.1.2 với `ALARM_POLICY_SELF_TEST` và `--warnings all`: LAN có macro, LAN cấu hình cũ thiếu macro, TLS thiếu CA, TLS có CA fixture công khai. Build LAN cuối: RAM 36.888/80.192, IRAM 61.555/65.536, flash 338.976/1.048.576 byte. Build TLS có CA: RAM 37.420/80.192, IRAM 61.891/65.536, flash 447.480/1.048.576 byte.
+- Phần provisioning Wi-Fi được đối chiếu giữ nguyên: FLASH/D3 hoặc Serial mở AP, kiểm tra Wi-Fi mới trước khi lưu EEPROM, ưu tiên mạng đã lưu sau khởi động lại. Đã thêm hướng dẫn [đổi Wi-Fi không nạp lại](../README.md#đổi-wi-fi-sau-khi-nạp-firmware).
+- Chưa nạp lên ESP hoặc thử broker/TLS, đổi Wi-Fi, EEPROM/LittleFS và còi/LED trên phần cứng thật trong lần sửa này. CA và mật khẩu dùng khi build là fixture, không phải cấu hình hoạt động của thiết bị.
+
 ## Nguồn/build trước bổ sung cloud TLS
 
 - Marker source: NODE_FULL_V6_DEVICE_TOPICS; ESP gửi namespace telemetry riêng theo ID và metadata thử còi/đèn version 2.
