@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, Text
 
 from app.db.session import Base
@@ -32,4 +34,8 @@ class Measurement(Base):
 
     @property
     def is_backfill(self):
-        return False
+        try:
+            payload = json.loads(self.raw_payload) if self.raw_payload else {}
+        except (TypeError, ValueError):
+            return False
+        return isinstance(payload, dict) and payload.get("backfill") is True

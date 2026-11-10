@@ -21,6 +21,8 @@ class JournalController:
         storage.dispatch_command(command, user, publish)
 
     def reconcile(self, item, now):
+        if item["data"].get("backfill", False):
+            return self.commands.get(item["data"]["device_id"])
         command = self._refresh(item, now)
         if command:
             storage.update_command(command, item["data"])
