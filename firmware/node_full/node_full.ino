@@ -425,12 +425,9 @@ const char* stateName() {
 void setBuzzer(bool enabled) {
   if (enabled == buzzerCommand) return;
   buzzerCommand = enabled;
-  if (enabled) {
-    analogWrite(BUZZER_PIN, 128);
-  } else {
-    analogWrite(BUZZER_PIN, BUZZER_IDLE_LEVEL == HIGH ? 255 : 0);
-    digitalWrite(BUZZER_PIN, BUZZER_IDLE_LEVEL);
-  }
+
+  digitalWrite(BUZZER_PIN,
+               enabled ? LOW : BUZZER_IDLE_LEVEL);
 }
 
 void applyOutputs(uint32_t now) {
