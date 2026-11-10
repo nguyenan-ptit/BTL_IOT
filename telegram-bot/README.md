@@ -34,7 +34,7 @@ Bot phải chạy liên tục thì mới báo được. Dừng bằng Ctrl+C.
 - `/login`: nhập tên đăng nhập, rồi mật khẩu của website. Tin chứa mật khẩu bị xoá ngay.
 - Nút **Tình trạng phòng**: các phòng trong phạm vi tài khoản, kèm số đo và giờ nhận gần nhất.
 - Nút **Sự cố đang mở**: các sự cố chưa kết thúc.
-- Có sự cố mới: bot gửi tin kèm nút **Tiếp nhận** và nhắc lại mỗi 10 giây tới khi có người tiếp nhận (trên web hoặc Telegram).
+- Có sự cố mới: bot gửi tin kèm nút **Tiếp nhận** và nhắc lại mỗi 10 giây tới khi chính người đó tiếp nhận (trên web hoặc Telegram). Người khác đã tiếp nhận thì tin nhắc ghi tên họ, nhưng vẫn nhắc bạn. Tài khoản quản trị viên thôi bị nhắc khi đã có người tiếp nhận.
 - Hết cảnh báo: bot gửi tin kèm nút **Đóng sự cố**.
 - `/logout` hoặc nút **Đăng xuất**: ngừng nhận cảnh báo.
 - `/menu`: hiện lại bàn phím menu. Nút "Menu" cạnh ô chat cũng liệt kê đủ các lệnh.

@@ -82,3 +82,13 @@ def test_huong_dan_theo_vai_tro():
     assert "/phong" in tenant and "/lichsu" in tenant and "/thucoi" not in tenant
     landlord = help_message("landlord")
     assert "/thucoi" in landlord and "mất kết nối" in landlord
+
+
+def test_tin_nhac_ghi_nguoi_da_tiep_nhan():
+    from bot.texts import incident_alert
+    acked = {**INCIDENT, "status": "acknowledged",
+             "acknowledgements": [{"user": {"id": "2", "displayName": "An", "role": "tenant"},
+                                   "at": "2026-11-09T07:51:00+00:00"}]}
+    text = incident_alert(acked, NOW, reminder=True)
+    assert "An đã tiếp nhận" in text and "bạn chưa tiếp nhận" in text
+    assert "chưa ai tiếp nhận" in incident_alert(INCIDENT, NOW)

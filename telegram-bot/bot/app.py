@@ -15,7 +15,7 @@ from . import texts
 from .backend import ApiError, Backend
 from .config import Config
 from .crypto import encrypt
-from .decide import Action, next_action
+from .decide import Action, needs_ack, next_action
 from .monitor import Alert, conditions, step
 from .sessions import NeedsLogin, Sessions
 from .store import Link, Notice, Store
@@ -197,7 +197,7 @@ async def show_incidents(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("Không có sự cố nào đang mở.", reply_markup=menu_for(link.role))
         return
     for incident in incidents:
-        if incident["status"] == "open":
+        if needs_ack(incident, _can_act(link)):
             markup = _incident_buttons(context, incident["id"], "ack" if _can_act(link) else None)
             await update.message.reply_text(texts.incident_alert(incident, _now()), reply_markup=markup)
         else:
@@ -272,11 +272,11 @@ async def _edit(context, chat_id: int, message_id: int | None, text: str | None 
 
 async def _handle(context, link: Link, incident: dict, store: Store, config: Config) -> None:
     notice = store.get_notice(link.chat_id, incident["id"])
-    action = next_action(incident, notice, time.time(), config.remind_seconds)
+    action = next_action(incident, notice, time.time(), config.remind_seconds, personal=_can_act(link))
     now = _now()
     chat = link.chat_id
     if action == Action.SEND_NEW:
-        if incident["status"] == "open":
+        if needs_ack(incident, _can_act(link)):
             mid = await _send(context, chat, texts.incident_alert(incident, now),
                               _incident_buttons(context, incident["id"], "ack" if _can_act(link) else None))
             phase = "open"

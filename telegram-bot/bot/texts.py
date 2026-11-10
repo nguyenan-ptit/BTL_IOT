@@ -94,11 +94,16 @@ def _people(incident: dict) -> str:
     return ", ".join(a["user"]["displayName"] for a in incident.get("acknowledgements", []))
 
 
+def _ack_state(incident: dict) -> str:
+    people = _people(incident)
+    return f"{people} đã tiếp nhận, bạn chưa tiếp nhận" if people else "chưa ai tiếp nhận"
+
+
 def incident_alert(incident: dict, now: datetime, reminder: bool = False) -> str:
     head = "🔁 NHẮC LẠI" if reminder else "🔥 CẢNH BÁO"
     return (
         f"{head}: {room_name(incident['roomName'])} phát hiện {_signs(incident)}\n"
-        f"Từ {clock(incident['startedAt'], now)} · chưa ai tiếp nhận\n{_measure(incident)}\n"
+        f"Từ {clock(incident['startedAt'], now)} · {_ack_state(incident)}\n{_measure(incident)}\n"
         "Có cháy thật: gọi 114."
     )
 
@@ -180,7 +185,7 @@ def help_message(role: str | None) -> str:
         "/logout – đăng xuất, ngừng nhận cảnh báo",
         "/help – xem các lệnh",
         "",
-        "Có sự cố, bot báo ngay và nhắc lại mỗi 10 giây tới khi có người bấm Tiếp nhận. "
+        "Có sự cố, bot báo ngay và nhắc lại mỗi 10 giây tới khi chính bạn bấm Tiếp nhận. "
         "Hết cảnh báo thì bấm Đóng sự cố.",
     ]
     if role == "landlord":

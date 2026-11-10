@@ -44,3 +44,19 @@ def test_da_dong_thi_sua_tin():
 
 def test_khong_doc_duoc_su_co_thi_khong_lam_gi():
     assert next_action(None, notice("open"), NOW, 10) == Action.NONE
+
+
+def test_moi_nguoi_bi_nhac_toi_khi_chinh_minh_tiep_nhan():
+    # An đã tiếp nhận, Bình (personal=True) chưa: Bình vẫn bị nhắc.
+    other_acked = {**inc("acknowledged"), "acknowledgedByMe": False}
+    assert next_action(other_acked, None, NOW, 10, personal=True) == Action.SEND_NEW
+    assert next_action(other_acked, notice("open"), NOW, 10, personal=True) == Action.REMIND
+    assert next_action(other_acked, notice("open", sent=NOW - 5), NOW, 10, personal=True) == Action.NONE
+    # Bình tiếp nhận xong thì thôi nhắc.
+    me_acked = {**inc("acknowledged"), "acknowledgedByMe": True}
+    assert next_action(me_acked, notice("open"), NOW, 10, personal=True) == Action.MARK_ACK
+
+
+def test_admin_thoi_nhac_khi_co_nguoi_tiep_nhan():
+    other_acked = {**inc("acknowledged"), "acknowledgedByMe": False}
+    assert next_action(other_acked, notice("open"), NOW, 10, personal=False) == Action.MARK_ACK
