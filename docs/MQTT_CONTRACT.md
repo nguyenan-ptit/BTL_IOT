@@ -36,6 +36,8 @@ Ba bản tin đầy đủ đã được kiểm tra hợp lệ:
 | boot_id | 16 ký tự hex thường, thay sau khởi động. |
 | seq | Nguyên không âm 32 bit; bộ đếm telemetry trong lần chạy, có thể có khoảng trống khi gửi thất bại. |
 | uptime_s | Nguyên không âm, giây hoạt động; không phải UTC/Unix timestamp. |
+| measured_at | Tùy chọn với mẫu trực tiếp, bắt buộc với mẫu gửi bù. Giờ đo SNTP: Unix seconds (số nguyên, không phải milliseconds) hoặc ISO 8601 có múi giờ, ví dụ `2026-11-10T08:00:00+07:00` / `2026-11-10T01:00:00Z`. |
+| backfill | Boolean; thiếu trường này tương đương false. Gửi `true` khi phát lại mẫu đã lưu lúc mất MQTT. |
 | system_state | normal / fault / alarm theo cảm biến. |
 | led / buzzer_cmd | green / yellow / red_blink và boolean, là lệnh đầu ra phần mềm. |
 | temperature | value_c: số °C hoặc null; health; alarm boolean. Lỗi số đo phải null, không gửi số cũ như số đo mới. |
@@ -53,6 +55,31 @@ Power present cần D1=1; missing cần D1=0. Flame nguồn chưa hợp lệ/dis
 **seq khác buzzer_test.command_seq.** Lệnh thử dùng bộ đếm command_seq. Lúc idle: command_seq=0, last_request_id rỗng, active=false, remaining_ms=0. Sau lệnh: ID 32 hex thường; running đi với active=true và remaining_ms>0; completed/stopped/blocked/interrupted đi với active=false, remaining_ms=0.
 
 Khi thử đầu ra v2, LED đỏ nhấp nháy/còi bật nhưng system_state và các cờ alarm vẫn theo cảm biến. Không tạo sự cố cháy chỉ từ led=red_blink hoặc buzzer_cmd=true. Cảm biến lỗi vẫn có thể giữ system_state=fault trong lượt thử. Phiên bản metadata v1 cũ chỉ thử còi; nếu phía nhận hỗ trợ lịch sử cũ thì cần phân biệt capability, không coi v1 là bản thử chung.
+
+### Gửi bù sau mất MQTT — hợp đồng backend
+
+Backend nhận hai trường trên với schema 2–6, không cần tăng schema version.
+Firmware cần giữ nguyên `device_id`, `boot_id`, `seq` và dữ liệu của từng mẫu khi phát lại;
+khóa chống trùng vẫn là `(device_id, boot_id, seq)`. Gửi mẫu trong bộ đệm theo thứ tự
+giờ đo trước khi gửi dữ liệu trực tiếp. Việc thêm bộ đệm firmware do An thực hiện riêng.
+
+Backend chuẩn hóa giờ đo về UTC và lưu ở `history.timestamp`; giờ nhận thực tế lưu
+riêng ở `history.created_at`. Payload cũ thiếu cả hai trường vẫn dùng giờ nhận làm
+giờ đo. Backend từ chối cờ sai kiểu, mẫu gửi bù thiếu giờ đo, giờ trước năm 2024
+hoặc vượt quá giờ nhận hơn 5 phút. Độ phân giải lưu trữ là một giây theo schema hiện có.
+Không cần migration database cho thay đổi này.
+
+Cảnh báo gửi bù tạo/cập nhật sự cố theo giờ đo. Mẫu thuộc khoảng thời gian sự cố
+đã recovered/closed chỉ bổ sung lịch sử, không mở lại sự cố. Mẫu cảnh báo đến muộn
+mà đã có mẫu xác nhận cảm biến bình thường sau đó được ghi thành sự cố recovered.
+Mẫu cũ không khôi phục sự cố mới hơn. Một cảnh báo mới sau khi sự cố trước kết thúc
+vẫn tạo sự cố mới.
+
+API lịch sử và danh sách thiết bị trả thêm `measured_at`, `is_backfill`, đồng thời
+`received_at` luôn là giờ nhận. API sự cố trả `measuredAt`, `receivedAt`, `isBackfill`.
+Mẫu mới nhất được chọn theo giờ đo. Mẫu gửi bù không dùng để xác nhận lệnh điều khiển,
+cập nhật phiên bản firmware/phần cứng hiện tại, hoặc coi dữ liệu cảm biến cũ là đang online.
+Backend vẫn cập nhật `devices.last_seen_at` khi nhận mẫu gửi bù hợp lệ để ghi nhận lần liên lạc.
 
 ## 3. Lệnh đổi ngưỡng và ACK
 

@@ -265,6 +265,111 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(incident["status"], "open")
         self.assertIsNone(incident["recovered_at"])
 
+    def backfill(self, seq, moment, alarm=False):
+        data = self.sample(seq=seq)
+        data.update(backfill=True, measured_at=moment.isoformat())
+        if alarm:
+            data["temperature"].update(alarm=True, value_c=65.0)
+            data.update(system_state="alarm", led="red_blink", buzzer_cmd=True)
+        return data
+
+    def test_measurement_time_validation_and_legacy_fallback(self):
+        received = datetime(2026, 11, 9, tzinfo=timezone.utc)
+        for value in ("2026-11-09T07:00:00+07:00", int(received.timestamp())):
+            self.assertEqual(telemetry_validation.measurement_time(
+                {"measured_at": value, "backfill": True}, received), received)
+        self.assertEqual(telemetry_validation.measurement_time({}, received), received)
+        for fields in ({"backfill": True}, {"backfill": "true"}, {"backfill": 1},
+                       *({"measured_at": value} for value in (
+                           None, True, 0, 1794182400000, "2026-11-09T00:00:00", "bad",
+                           "2020-01-01T00:00:00Z", "2027-01-01T00:00:00Z"))):
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                telemetry_validation.measurement_time(fields, received)
+
+    def test_backfill_stores_both_times_and_deduplicates(self):
+        self.db.device()
+        measured = datetime(2026, 11, 8, tzinfo=timezone.utc)
+        received = measured + timedelta(hours=2)
+        data = self.backfill(1, measured)
+        data["firmware_version"] = "historical-version"
+        self.assertTrue(storage.save(data, received))
+        self.assertFalse(storage.save(data, received + timedelta(seconds=30)))
+        row = self.db.row("SELECT timestamp, created_at FROM history")
+        self.assertEqual(row["timestamp"], measured.replace(tzinfo=None))
+        self.assertEqual(row["created_at"], received.replace(tzinfo=None))
+        self.assertIsNone(self.db.row("SELECT firmware_version FROM devices")["firmware_version"])
+        history = storage.history("node01", start=measured, end=measured, user=ADMIN)
+        self.assertEqual(history[0]["measured_at"], measured.isoformat())
+        self.assertEqual(history[0]["received_at"], received.isoformat())
+        self.assertTrue(history[0]["is_backfill"])
+
+    def test_backfill_incident_times_and_no_reopen_after_close(self):
+        self.db.device()
+        start = datetime(2026, 11, 8, tzinfo=timezone.utc)
+        received = start + timedelta(hours=1)
+        storage.save(self.backfill(1, start, alarm=True), received)
+        storage.save(self.backfill(2, start + timedelta(seconds=30), alarm=True), received)
+        storage.save(self.backfill(3, start + timedelta(seconds=60)), received)
+        self.db.connection.execute("UPDATE incidents SET status='closed', closed_at=?", (received.replace(tzinfo=None),))
+        storage.save(self.backfill(4, start + timedelta(seconds=15), alarm=True), received)
+        row = self.db.row("SELECT * FROM incidents")
+        self.assertEqual(row["created_at"], start.replace(tzinfo=None))
+        self.assertEqual(row["last_detected_at"], (start + timedelta(seconds=30)).replace(tzinfo=None))
+        self.assertEqual(row["recovered_at"], (start + timedelta(seconds=60)).replace(tzinfo=None))
+        self.assertEqual(row["status"], "closed")
+        self.assertEqual(self.db.row("SELECT COUNT(*) AS n FROM incidents")["n"], 1)
+        storage.save(self.backfill(6, start - timedelta(seconds=30), alarm=True), received)
+        self.assertEqual(self.db.row("SELECT COUNT(*) AS n FROM incidents")["n"], 1)
+        self.assertEqual(self.db.row("SELECT status FROM incidents")["status"], "closed")
+        # A genuinely later event is still a new incident.
+        storage.save(self.backfill(5, received + timedelta(seconds=1), alarm=True), received + timedelta(seconds=2))
+        self.assertEqual(self.db.row("SELECT COUNT(*) AS n FROM incidents")["n"], 2)
+
+    def test_late_alarm_is_recorded_recovered_when_clear_sample_already_exists(self):
+        self.db.device()
+        start = datetime(2026, 11, 8, tzinfo=timezone.utc)
+        received = start + timedelta(hours=1)
+        storage.save(self.backfill(2, start + timedelta(seconds=30)), received)
+        storage.save(self.backfill(1, start, alarm=True), received)
+        row = self.db.row("SELECT * FROM incidents")
+        self.assertEqual(row["status"], "recovered")
+        self.assertEqual(row["created_at"], start.replace(tzinfo=None))
+        self.assertEqual(row["recovered_at"], (start + timedelta(seconds=30)).replace(tzinfo=None))
+
+    def test_old_backfill_cannot_recover_current_incident_or_replace_latest(self):
+        self.db.device()
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        current = self.backfill(10, now, alarm=True)
+        current["backfill"] = False
+        storage.save(current, now)
+        storage.save(self.backfill(1, now - timedelta(hours=1)), now)
+        item = storage.read_latest(ADMIN, now=now)[0]
+        self.assertEqual(item["data"]["seq"], 10)
+        self.assertTrue(item["online"])
+        self.assertEqual(self.db.row("SELECT status FROM incidents")["status"], "open")
+
+    def test_receiver_accepts_backfill_without_command_acknowledgement(self):
+        self.db.device()
+        observed = []
+        rx = Receiver({"mqtt_topic": "iot/devices/+/telemetry"}, on_accepted=observed.append)
+        data = self.backfill(1, datetime.now(timezone.utc) - timedelta(minutes=5))
+        rx.on_message(None, None, SimpleNamespace(topic="iot/devices/node01/telemetry", retain=False,
+                                                  payload=json.dumps(data).encode()))
+        self.assertEqual(rx.snapshot()["accepted"], 1)
+        self.assertEqual(observed, [])
+        self.assertFalse(self.item()["online"])
+        self.assertTrue(self.item()["is_backfill"])
+
+    def test_incident_measurement_api_exposes_backfill(self):
+        from app.models.measurement import Measurement
+        from app.api.routes.incidents import _measurement_dict
+        moment = datetime(2026, 11, 8)
+        row = Measurement(measured_at=moment, received_at=moment + timedelta(hours=1),
+                          raw_payload=json.dumps({"backfill": True}))
+        result = _measurement_dict(row)
+        self.assertTrue(result["isBackfill"])
+        self.assertNotEqual(result["measuredAt"], result["receivedAt"])
+
     def test_duplicate_does_not_change_last_seen_or_version(self):
         self.db.device()
         data = self.sample()
