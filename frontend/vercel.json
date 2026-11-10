@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://usgs-views-des-boring.trycloudflare.com/api/:path*"
+      "destination": "https://prostate-pocket-relation-instrumental.trycloudflare.com/api/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
