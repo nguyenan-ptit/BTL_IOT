@@ -68,7 +68,7 @@ def _measurement_dict(row: Measurement | None):
     return {
         "measuredAt": _iso(row.measured_at),
         "receivedAt": _iso(received),
-        "isBackfill": row.is_backfill,
+        "isBackfill": False,
         "gas": row.gas_value if gas_data.get("health") == "ok" else None,
         "temperature": row.temperature_value if temperature_data.get("health") == "ok" else None,
         "flame": flame,

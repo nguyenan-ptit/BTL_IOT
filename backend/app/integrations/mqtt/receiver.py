@@ -90,7 +90,7 @@ class Receiver:
             else:
                 self.status["duplicates"] += 1
             self.status["last_error"] = None
-        if inserted and not data.get("backfill", False) and self.on_accepted:
+        if inserted and self.on_accepted:
             try:
                 self.on_accepted(data)
             except Exception as exc:

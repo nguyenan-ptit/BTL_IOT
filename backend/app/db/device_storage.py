@@ -7,7 +7,7 @@ import pymysql
 from fastapi import HTTPException
 
 from app.core.legacy_auth import room_scope, verify_room_access
-from app.services.telemetry_validation import measurement_time, sensor_details
+from app.services.telemetry_validation import sensor_details
 
 logger = logging.getLogger("iot_full")
 ONLINE_WINDOW_S = 20
@@ -142,18 +142,11 @@ def _record_incident(cursor, data, room_id, detected_at):
         signs.append("flame")
 
     cursor.execute(
-        "SELECT incident_id, status, last_detected_at FROM incidents "
-        "WHERE device_id = %s AND room_id <=> %s AND created_at <= %s "
-        "AND (COALESCE(recovered_at, closed_at) IS NULL OR COALESCE(recovered_at, closed_at) >= %s) "
-        "ORDER BY created_at DESC, incident_id DESC LIMIT 1 FOR UPDATE",
-        (data["device_id"], room_id, detected_at, detected_at),
+        "SELECT incident_id FROM incidents WHERE device_id = %s AND room_id <=> %s "
+        "AND status IN ('open', 'handling') ORDER BY created_at DESC, incident_id DESC LIMIT 1 FOR UPDATE",
+        (data["device_id"], room_id),
     )
     active = cursor.fetchone()
-    # A delayed frame belonging to a completed incident must never reopen it.
-    if active and active["status"] in ("recovered", "closed"):
-        return
-    if active and active["last_detected_at"] and detected_at < active["last_detected_at"]:
-        return
     if signs:
         alert_type = ",".join(signs)
         details = json.dumps({"signs": signs}, ensure_ascii=False)
@@ -165,54 +158,28 @@ def _record_incident(cursor, data, room_id, detected_at):
                 (alert_type, message, details, detected_at, active["incident_id"]),
             )
         else:
-            # If a later clear sample has already arrived, record the historical
-            # incident as recovered instead of raising a new current alarm.
-            cursor.execute(
-                "SELECT timestamp, raw_payload FROM history WHERE device_id = %s AND room_id <=> %s "
-                "AND timestamp > %s ORDER BY timestamp ASC, id ASC",
-                (data["device_id"], room_id, detected_at),
-            )
-            recovered_at = next((row["timestamp"] for row in cursor.fetchall()
-                                 if _sensors_clear(json.loads(row["raw_payload"]))), None)
-            cursor.execute(
-                "SELECT incident_id, created_at FROM incidents WHERE device_id = %s AND room_id <=> %s "
-                "AND created_at > %s ORDER BY created_at ASC, incident_id ASC LIMIT 1 FOR UPDATE",
-                (data["device_id"], room_id, detected_at),
-            )
-            following = cursor.fetchone()
-            if following and (recovered_at is None or recovered_at >= following["created_at"]):
-                # Earlier alarm from the same uninterrupted event. Preserve its
-                # acknowledgement/closure instead of creating a second incident.
-                cursor.execute("UPDATE incidents SET created_at = %s WHERE incident_id = %s",
-                               (detected_at, following["incident_id"]))
-                return
             cursor.execute(
                 "INSERT INTO incidents (device_id, room_id, alert_type, message, status, trigger_details, "
-                "created_at, last_detected_at, recovered_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (data["device_id"], room_id, alert_type, message,
-                 "recovered" if recovered_at else "open", details, detected_at, detected_at, recovered_at),
+                "created_at, last_detected_at) VALUES (%s, %s, %s, %s, 'open', %s, %s, %s)",
+                (data["device_id"], room_id, alert_type, message, details, detected_at, detected_at),
             )
         return
 
     # Do not close an incident while a required sensor is warming up, faulted,
     # filtering, or reporting a power problem; absence of an alarm is not proof
     # that the hazard has cleared in those states.
-    if active and _sensors_clear(data):
-        cursor.execute(
-            "UPDATE incidents SET status = 'recovered', recovered_at = %s WHERE incident_id = %s",
-            (detected_at, active["incident_id"]),
-        )
-
-
-def _sensors_clear(data):
-    temperature, mq2, flame = (_dict(data.get(key)) for key in ("temperature", "mq2", "flame"))
     required_sensors = [temperature, mq2]
     if data.get("schema_version", 2) >= 3:
         required_sensors.append(flame)
     sensors_clear = all(sensor.get("health") in ("ok", "disabled") for sensor in required_sensors)
     if data.get("schema_version") in (4, 6):
         sensors_clear = sensors_clear and flame.get("power_health") == "present"
-    return sensors_clear and not any(sensor.get("alarm") is True for sensor in required_sensors)
+    if active and sensors_clear:
+        cursor.execute(
+            "UPDATE incidents SET status = 'recovered', recovered_at = %s "
+            "WHERE device_id = %s AND room_id <=> %s AND status IN ('open', 'handling')",
+            (detected_at, data["device_id"], room_id),
+        )
 
 
 def audit(cursor, user_id, room_id, action, device_id, details, result="success"):
@@ -239,7 +206,6 @@ def save(data, received_at=None):
     """Only active/active; duplicates cannot refresh registry metadata or last_seen."""
     temperature, mq2, flame = (_dict(data.get(key)) for key in ("temperature", "mq2", "flame"))
     received = _utc_naive(received_at)
-    measured = _utc_naive(measurement_time(data, _as_utc(received)))
     with session() as cursor:
         cursor.execute("SELECT room_id, lifecycle_status, credential_status FROM devices "
                        "WHERE device_id = %s FOR UPDATE", (data["device_id"],))
@@ -250,21 +216,21 @@ def save(data, received_at=None):
             raise DeviceNotAllowed("DeviceNotAllowed")
         cursor.execute(
             "INSERT INTO history (timestamp, device_id, room_id, room, boot_id, seq, system_state, "
-            "temperature_c, mq2_adc, flame_do, raw_payload, created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+            "temperature_c, mq2_adc, flame_do, raw_payload) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
             "ON DUPLICATE KEY UPDATE id = id",
-            (measured, data["device_id"], device["room_id"], data["room"], data["boot_id"], data["seq"],
+            (received, data["device_id"], device["room_id"], data["room"], data["boot_id"], data["seq"],
              data.get("system_state", "normal"), temperature.get("value_c"), mq2.get("adc_raw"),
-             flame.get("do_level"), json.dumps(data, ensure_ascii=False, allow_nan=False), received))
+             flame.get("do_level"), json.dumps(data, ensure_ascii=False, allow_nan=False)))
         if cursor.rowcount != 1:
             return False
         updates, params = ["last_seen_at = GREATEST(COALESCE(last_seen_at, %s), %s)"], [received, received]
         for key in ("hardware_version", "firmware_version"):
-            if key in data and not data.get("backfill", False):
+            if key in data:
                 updates.append(key + " = %s")
                 params.append(data[key])
         cursor.execute("UPDATE devices SET " + ", ".join(updates) + " WHERE device_id = %s",
                        (*params, data["device_id"]))
-        _record_incident(cursor, data, device["room_id"], measured)
+        _record_incident(cursor, data, device["room_id"], received)
     return True
 
 
@@ -274,29 +240,25 @@ def read_latest(user, now=None):
     condition, params = room_scope(user, "d.room_id")
     with session() as cursor:
         cursor.execute(
-            "SELECT d.*, h.timestamp AS measured_at, h.created_at AS received_at, h.raw_payload FROM devices d LEFT JOIN history h "
-            "ON h.id = (SELECT h2.id FROM history h2 WHERE h2.device_id = d.device_id "
-            "AND h2.room_id <=> d.room_id ORDER BY h2.timestamp DESC, h2.id DESC LIMIT 1) WHERE " + condition + " ORDER BY d.device_id", params)
+            "SELECT d.*, h.timestamp AS received_at, h.raw_payload FROM devices d LEFT JOIN history h "
+            "ON h.id = (SELECT MAX(h2.id) FROM history h2 WHERE h2.device_id = d.device_id "
+            "AND h2.room_id <=> d.room_id) WHERE " + condition + " ORDER BY d.device_id", params)
         rows = cursor.fetchall()
     items = []
     for row in rows:
         data = json.loads(row["raw_payload"]) if row["raw_payload"] else None
         received = _as_utc(row["received_at"])
-        measured = _as_utc(row["measured_at"])
-        age = (now - measured).total_seconds() if measured else None
-        online = bool(data and not data.get("backfill", False) and
-                      age is not None and 0 <= age <= ONLINE_WINDOW_S)
+        age = (now - received).total_seconds() if received else None
+        online = age is not None and 0 <= age <= ONLINE_WINDOW_S
         pending = bool(data and data.get("schema_version", 6) < 6)
         display = "offline" if not online else data.get("system_state", "normal")
         if online and pending and display != "alarm":
             display = "fault"
-        registry = public_row({key: value for key, value in row.items() if key not in ("raw_payload", "received_at", "measured_at")})
+        registry = public_row({key: value for key, value in row.items() if key not in ("raw_payload", "received_at")})
         items.append({"device": registry, "device_id": row["device_id"], "room_id": row["room_id"],
                       "lifecycle_status": row["lifecycle_status"], "credential_status": row["credential_status"],
                       "data": data, "online": online, "connectivity": "online" if online else "offline",
                       "received_at": received.isoformat() if received else None, "age_seconds": age,
-                      "measured_at": _as_utc(row["measured_at"]).isoformat() if row["measured_at"] else None,
-                      "is_backfill": bool(data and data.get("backfill", False)),
                       "display_state": display, "configuration_pending": pending,
                       "sensors": sensor_details(data) if data else []})
     return items
@@ -312,12 +274,10 @@ def history(device_id, limit=20, start=None, end=None, *, user):
         filters.append("h.timestamp <= %s")
         params.append(_utc_naive(end))
     with session() as cursor:
-        cursor.execute("SELECT h.timestamp, h.created_at, h.room_id, h.raw_payload FROM history h WHERE " +
-                       " AND ".join(filters) + " ORDER BY h.timestamp DESC, h.id DESC LIMIT %s", (*params, limit))
+        cursor.execute("SELECT h.timestamp, h.room_id, h.raw_payload FROM history h WHERE " +
+                       " AND ".join(filters) + " ORDER BY h.id DESC LIMIT %s", (*params, limit))
         rows = cursor.fetchall()
-    return [{"received_at": _as_utc(row["created_at"] or row["timestamp"]).isoformat(),
-             "measured_at": _as_utc(row["timestamp"]).isoformat(),
-             "is_backfill": json.loads(row["raw_payload"]).get("backfill", False), "room_id": row["room_id"],
+    return [{"received_at": _as_utc(row["timestamp"]).isoformat(), "room_id": row["room_id"],
              "data": json.loads(row["raw_payload"])} for row in rows]
 
 

@@ -2,7 +2,6 @@
 import json
 import math
 import re
-from datetime import datetime, timezone
 
 DS_HEALTH = {
     "ok": "Đọc nhiệt độ hợp lệ",
@@ -56,35 +55,10 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def measurement_time(data, received):
-    """Accept SNTP Unix seconds or an ISO 8601 timestamp with an explicit zone."""
-    require(type(data.get("backfill", False)) is bool, "backfill phải là boolean")
-    if "measured_at" not in data:
-        require(not data.get("backfill", False), "Mẫu gửi bù phải có measured_at")
-        return received
-    value = data["measured_at"]
-    if type(value) is int:
-        require(1704067200 <= value <= 253402300799, "measured_at Unix seconds không hợp lệ")
-        measured = datetime.fromtimestamp(value, timezone.utc)
-    else:
-        require(isinstance(value, str) and len(value) <= 40, "measured_at không hợp lệ")
-        try:
-            measured = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            raise ValueError("measured_at phải là ISO 8601 có múi giờ") from None
-        require(measured.tzinfo is not None, "measured_at phải có múi giờ")
-        measured = measured.astimezone(timezone.utc)
-        require(measured.year >= 2024, "measured_at chưa đồng bộ SNTP")
-    # A small clock skew is allowed; do not accept an unsynchronised future clock.
-    require((measured - received).total_seconds() <= 300, "measured_at nằm quá xa trong tương lai")
-    return measured
-
-
 def validate_message(raw):
     require(isinstance(raw, bytes) and len(raw) <= 4096, "Kích thước bản tin không hợp lệ")
     data = json.loads(raw.decode("utf-8"))
     require(type(data) is dict, "Bản tin phải là JSON object")
-    measurement_time(data, datetime.now(timezone.utc))
     for key, maximum in (("hardware_version", 32), ("firmware_version", 64)):
         if key in data:
             require(isinstance(data[key], str) and 0 < len(data[key]) <= maximum
