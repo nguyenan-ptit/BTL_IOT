@@ -9,6 +9,8 @@
 // Copy mqtt_ca.example.h to mqtt_ca.h and paste the CA downloaded from the provider.
 // Signed LAN discovery is disabled in TLS mode; there is no plaintext fallback.
 #define MQTT_USE_TLS 0
+// Keep 16384 unless the broker is verified to negotiate a smaller TLS fragment.
+#define MQTT_TLS_FRAGMENT_BYTES 16384
 
 // Initial fallback only. FLASH/D3 (hold 3s after boot) opens the setup AP;
 // verified Wi-Fi saved there overrides these values across reboots.
@@ -29,12 +31,15 @@ constexpr char ROOM_ID[] = "101";
 // Change for each build. Reported automatically in telemetry.
 #define NODE_FIRMWARE_VERSION "node-full-v7-backend-compatible"
 
+// Leave the password-protected Wi-Fi setup network on from boot.
+#define WIFI_SETUP_ALWAYS_ON 0
+
 // Enable on BOTH builds of an OTA demo. Use the same device ID and trust anchors.
 #define OTA_ENABLED 0
 #if OTA_ENABLED
 constexpr char OTA_DOWNLOAD_HOST[] = "firmware.example.com"; // HTTPS port 443
-constexpr char OTA_DOWNLOAD_CA_PEM[] = "";  // PEM CA for that HTTPS origin
-constexpr char OTA_SIGNING_PUBLIC_KEY_PEM[] = ""; // PEM RSA-2048 public key
+const char OTA_DOWNLOAD_CA_PEM[] PROGMEM = "";  // PEM CA for that HTTPS origin
+const char OTA_SIGNING_PUBLIC_KEY_PEM[] PROGMEM = ""; // PEM RSA-2048 public key
 #endif
 
 // MQ-2 AO -> 47k -> A0 junction; junction -> 10k -> common GND.

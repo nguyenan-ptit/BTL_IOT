@@ -19,6 +19,9 @@ extern "C" {
 #ifndef NODE_FIRMWARE_VERSION
 #define NODE_FIRMWARE_VERSION "node-full-v7-backend-compatible"
 #endif
+#ifndef WIFI_SETUP_ALWAYS_ON
+#define WIFI_SETUP_ALWAYS_ON 0
+#endif
 #ifndef OTA_ENABLED
 #define OTA_ENABLED 0
 #endif
@@ -29,10 +32,16 @@ extern "C" {
 #ifndef MQTT_USE_TLS
 #define MQTT_USE_TLS 0
 #endif
+#ifndef MQTT_TLS_FRAGMENT_BYTES
+#define MQTT_TLS_FRAGMENT_BYTES 16384
+#endif
 #if MQTT_USE_TLS != 0 && MQTT_USE_TLS != 1
 #error "MQTT_USE_TLS must be 0 or 1"
 #endif
 #if MQTT_USE_TLS
+static_assert(MQTT_TLS_FRAGMENT_BYTES == 16384 || MQTT_TLS_FRAGMENT_BYTES == 4096 ||
+              MQTT_TLS_FRAGMENT_BYTES == 2048 || MQTT_TLS_FRAGMENT_BYTES == 1024 ||
+              MQTT_TLS_FRAGMENT_BYTES == 512, "Invalid MQTT TLS fragment length");
 #include <WiFiClientSecureBearSSL.h>
 #if __has_include("mqtt_ca.h")
 #include "mqtt_ca.h"
@@ -122,7 +131,8 @@ SystemState state = SystemState::FAULT, lastSentState = SystemState::FAULT;
 
 // Wi-Fi provisioning is local to this ESP; MQTT identities/topics are unchanged.
 // Hold FLASH/D3 for 3 seconds AFTER boot, or send "wifi" in Serial Monitor.
-// The protected setup AP also opens after 30 seconds without a working Wi-Fi.
+// By default the protected setup AP also opens after 30 seconds offline.
+// WIFI_SETUP_ALWAYS_ON keeps it available at http://192.168.4.1/ from boot.
 constexpr uint8_t WIFI_SETUP_BUTTON_PIN = D3;
 constexpr uint32_t WIFI_SETTINGS_MAGIC = 0x57494631UL;
 constexpr uint32_t WIFI_PORTAL_WINDOW_MS = 300000, WIFI_OFFLINE_SETUP_MS = 30000;
@@ -154,7 +164,7 @@ const char WIFI_SETUP_PAGE[] PROGMEM = R"HTML(<!doctype html>
 <label>Tên Wi-Fi (SSID)<input name="ssid" maxlength="32" required autocomplete="off"></label>
 <label>Mật khẩu Wi-Fi<input name="password" type="password" maxlength="64" autocomplete="new-password"></label>
 <p>Để trống nếu mạng Wi-Fi không có mật khẩu.</p><button id="save">Kết nối và lưu</button></form>
-<p id="status" role="status"></p><p>Sau khi kết nối thành công, chuyển điện thoại hoặc máy tính về Wi-Fi có Internet. Mạng cài đặt sẽ tự tắt.</p>
+<p id="status" role="status"></p><p>Sau khi kết nối thành công, chuyển điện thoại hoặc máy tính về Wi-Fi có Internet. %SETUP_AVAILABILITY%</p>
 <script>const s=document.querySelector('#status'),b=document.querySelector('#save');let busy=false;
 document.querySelector('#f').onsubmit=async e=>{e.preventDefault();if(busy)return;busy=true;b.disabled=true;try{const r=await fetch('/save',{method:'POST',body:new URLSearchParams(new FormData(e.target))});const j=await r.json();s.textContent=j.message;if(!r.ok){busy=false;b.disabled=false}}catch(e){s.textContent='Mất kết nối với ESP. Kết nối lại mạng cài đặt và mở http://192.168.4.1.';busy=false;b.disabled=false}};
 setInterval(async()=>{try{const r=await fetch('/status',{cache:'no-store'});if(!r.ok)return;const j=await r.json();s.textContent=j.message;if(!j.busy){busy=false;b.disabled=false}}catch(e){}},2000);</script></html>)HTML";
@@ -219,6 +229,9 @@ void configureWifiPortalRoutes() {
     if (!wifiPortalClientAllowed()) return;
     String page(FPSTR(WIFI_SETUP_PAGE));
     page.replace("%TOKEN%", wifiPortalToken);
+    page.replace("%SETUP_AVAILABILITY%", WIFI_SETUP_ALWAYS_ON
+        ? "Mạng cài đặt vẫn mở để bạn đổi Wi-Fi khi cần."
+        : "Mạng cài đặt sẽ tự tắt.");
     wifiPortal.send(200, "text/html; charset=utf-8", page);
   });
   wifiPortal.on("/status", HTTP_GET, []() {
@@ -290,11 +303,14 @@ void startWifiPortal() {
   wifiPortalStartedAt = millis();
   wifiConnectedAt = 0;
   wifiPortalActive = true;
-  wifiDns.start(53, "*", setupIp);
+  // The Core DNS responder binds to all interfaces. Keep it off for the
+  // persistent portal and use the AP address directly.
+  if (!WIFI_SETUP_ALWAYS_ON) wifiDns.start(53, "*", setupIp);
   wifiPortal.begin();
   // Unique local setup key, not the router or MQTT password. Record it privately.
-  Serial.printf("Wi-Fi setup AP: %s\nSetup AP password: %s\nOpen http://192.168.4.1/ (5 minute window).\n",
-                wifiSetupSsid, wifiSettings.setupPassword);
+  Serial.printf("Wi-Fi setup AP: %s\nSetup AP password: %s\nOpen http://192.168.4.1/ (%s).\n",
+                wifiSetupSsid, wifiSettings.setupPassword,
+                WIFI_SETUP_ALWAYS_ON ? "always on" : "5 minute window");
 }
 
 void stopWifiPortal() {
@@ -319,8 +335,10 @@ void beginWifiProvisioning() {
   WiFi.setAutoReconnect(true);
   wifiOfflineSince = millis();
   wifiPortalEndedAt = millis() - WIFI_PORTAL_COOLDOWN_MS;
-  if (!beginKnownWifi()) startWifiPortal();
-  Serial.println("Hold FLASH/D3 for 3s after boot, or send wifi + Enter to configure Wi-Fi.");
+  const bool joiningKnownNetwork = beginKnownWifi();
+  if (WIFI_SETUP_ALWAYS_ON || !joiningKnownNetwork) startWifiPortal();
+  if (!WIFI_SETUP_ALWAYS_ON)
+    Serial.println("Hold FLASH/D3 for 3s after boot, or send wifi + Enter to configure Wi-Fi.");
 }
 
 void serviceWifiProvisioning(uint32_t now) {
@@ -346,7 +364,7 @@ void serviceWifiProvisioning(uint32_t now) {
     } else wifiSerialLength = 0;
   }
   if (wifiPortalActive) {
-    wifiDns.processNextRequest();
+    if (!WIFI_SETUP_ALWAYS_ON) wifiDns.processNextRequest();
     wifiPortal.handleClient();
   }
   if (wifiRequestQueued) {
@@ -369,7 +387,9 @@ void serviceWifiProvisioning(uint32_t now) {
       strcpy(wifiSettings.ssid, wifiCandidateSsid);
       strcpy(wifiSettings.password, wifiCandidatePassword);
       if (saveWifiSettings()) {
-        wifiPortalStatus = "Đã kết nối và lưu Wi-Fi. Mạng cài đặt sẽ tắt sau 15 giây.";
+        wifiPortalStatus = WIFI_SETUP_ALWAYS_ON
+            ? "Đã kết nối và lưu Wi-Fi. Mạng cài đặt vẫn mở."
+            : "Đã kết nối và lưu Wi-Fi. Mạng cài đặt sẽ tắt sau 15 giây.";
         wifiConnectedAt = millis();
         Serial.println("New Wi-Fi verified and saved; MQTT identity unchanged.");
       } else {
@@ -383,8 +403,6 @@ void serviceWifiProvisioning(uint32_t now) {
   } else {
     if (wifiWasConnected) wifiOfflineSince = now;
     if (!wifiCandidateActive && now - lastWifiTry >= 15000) beginKnownWifi();
-    if (!wifiPortalActive && now - wifiOfflineSince >= WIFI_OFFLINE_SETUP_MS
-        && now - wifiPortalEndedAt >= WIFI_PORTAL_COOLDOWN_MS) startWifiPortal();
   }
   if (wifiCandidateActive && now - wifiCandidateStartedAt >= WIFI_CONNECT_TIMEOUT_MS) {
     wifiCandidateActive = false;
@@ -394,8 +412,13 @@ void serviceWifiProvisioning(uint32_t now) {
   }
   wifiWasConnected = connected;
   now = millis(); // A flash commit must not make the new close deadline look old.
-  if (wifiPortalActive && (now - wifiPortalStartedAt >= WIFI_PORTAL_WINDOW_MS
-      || (wifiConnectedAt && now - wifiConnectedAt >= 15000))) stopWifiPortal();
+  if (!wifiPortalActive && now - wifiPortalEndedAt >= WIFI_PORTAL_COOLDOWN_MS &&
+      (WIFI_SETUP_ALWAYS_ON || (!connected && now - wifiOfflineSince >= WIFI_OFFLINE_SETUP_MS))) {
+    startWifiPortal();
+  }
+  if (!WIFI_SETUP_ALWAYS_ON && wifiPortalActive &&
+      (now - wifiPortalStartedAt >= WIFI_PORTAL_WINDOW_MS ||
+       (wifiConnectedAt && now - wifiConnectedAt >= 15000))) stopWifiPortal();
 }
 
 // Never apply commands or publish from a callback; the loop owns flash/output.
@@ -649,6 +672,8 @@ void configureMqtt() {
   if (networkConfigured) {
     transport.setTrustAnchors(&mqttTrustAnchors);
     transport.setSSLVersion(BR_TLS12, BR_TLS12);
+    transport.setBufferSizes(MQTT_TLS_FRAGMENT_BYTES,
+                             MQTT_TLS_FRAGMENT_BYTES == 16384 ? 512 : MQTT_TLS_FRAGMENT_BYTES);
     transport.setTimeout(1000);
     // Keep the DNS hostname for SNI and X.509 hostname verification.
     mqtt.begin(MQTT_HOST, MQTT_PORT, transport);
@@ -687,9 +712,28 @@ void serviceNetwork(uint32_t now) {
     lastNetworkTry = now;
     mqtt.setTimeout(MQTT_USE_TLS ? 2000 : 100);
     if (!mqtt.connect(DEVICE_ID, MQTT_USERNAME, MQTT_PASSWORD)) {
-      Serial.println("MQTT unavailable; reconnect will be retried.");
+      const auto error = mqtt.lastError();
+      Serial.printf("MQTT unavailable: error=%d, free_heap=%lu bytes. Will retry.\n",
+                    static_cast<int>(error), static_cast<unsigned long>(ESP.getFreeHeap()));
+      if (error == LWMQTT_NETWORK_FAILED_CONNECT) {
+#if MQTT_USE_TLS
+        char detail[128];
+        const int tlsError = transport.getLastSSLError(detail, sizeof(detail));
+        if (tlsError) Serial.printf("MQTT TLS error=%d: %s\n", tlsError, detail);
+        else Serial.println("MQTT TCP/TLS connection failed without a TLS alert.");
+#endif
+      } else if (error == LWMQTT_CONNECTION_DENIED) {
+        Serial.printf("MQTT CONNACK code=%d\n", static_cast<int>(mqtt.returnCode()));
+      }
       return;
     }
+#if MQTT_USE_TLS && MQTT_TLS_FRAGMENT_BYTES != 16384
+    if (!transport.getMFLNStatus()) {
+      Serial.println("MQTT TLS: broker did not negotiate the configured fragment length.");
+      mqtt.disconnect();
+      return;
+    }
+#endif
     if (!mqtt.subscribe(configSetTopic, 1) || !mqtt.subscribe(outputTestTopic, 1)) {
       Serial.println("Control subscription rejected; check broker ACL.");
       mqtt.disconnect();
@@ -708,6 +752,8 @@ void serviceNetwork(uint32_t now) {
 
 void setup() {
   Serial.begin(115200);
+  Serial.print("Reset reason: ");
+  Serial.println(ESP.getResetReason());
   digitalWrite(BUZZER_PIN, BUZZER_IDLE_LEVEL);
   pinMode(BUZZER_PIN, OUTPUT);
   analogWriteRange(255);
