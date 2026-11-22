@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     emqx_api_secret: str = Field(default="", validation_alias="IOT_EMQX_API_SECRET")
     emqx_deployment: str | None = Field(default=None, validation_alias="IOT_EMQX_DEPLOYMENT")
     emqx_policy_verified: bool | None = Field(default=None, validation_alias="IOT_EMQX_POLICY_VERIFIED")
+    ota_public_origin: str | None = Field(default=None, validation_alias="IOT_OTA_PUBLIC_ORIGIN")
+    ota_public_key: Path | None = Field(default=None, validation_alias="IOT_OTA_PUBLIC_KEY")
     jwt_secret_key: str = Field(validation_alias=AliasChoices("JWT_SECRET", "JWT_SECRET_KEY", "jwt_secret_key"))
     access_token_expire_minutes: int = 30
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "https://frontend-iot-web-crm.vercel.app"]

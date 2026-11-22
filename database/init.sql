@@ -190,9 +190,47 @@ CREATE TABLE mqtt_operations (
     FOREIGN KEY (requested_by) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE firmware_releases (
+    firmware_id CHAR(32) PRIMARY KEY,
+    device_id VARCHAR(64) NOT NULL,
+    version VARCHAR(64) NOT NULL,
+    board_model VARCHAR(64) NULL,
+    hardware_version VARCHAR(32) NULL,
+    size_bytes INT UNSIGNED NOT NULL,
+    sha256 CHAR(64) NOT NULL,
+    image MEDIUMBLOB NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_firmware_device_version (device_id, version),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE ota_jobs (
+    job_seq BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    job_id CHAR(32) NOT NULL UNIQUE,
+    device_id VARCHAR(64) NOT NULL,
+    firmware_id CHAR(32) NOT NULL,
+    requested_by INT NOT NULL,
+    start_boot_id CHAR(16) NOT NULL,
+    expires_uptime_s BIGINT UNSIGNED NOT NULL,
+    target_version VARCHAR(64) NOT NULL,
+    firmware_version VARCHAR(64) NOT NULL,
+    status ENUM('queued','pending','downloading','installing','succeeded','failed','timeout') NOT NULL,
+    progress TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    error_code VARCHAR(64) NULL,
+    requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deadline_at DATETIME NOT NULL,
+    finished_at DATETIME NULL,
+    INDEX idx_ota_device (device_id, job_seq),
+    INDEX idx_ota_status (status, deadline_at),
+    FOREIGN KEY (device_id) REFERENCES devices(device_id),
+    FOREIGN KEY (firmware_id) REFERENCES firmware_releases(firmware_id),
+    FOREIGN KEY (requested_by) REFERENCES users(user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE schema_migrations (
     version VARCHAR(32) PRIMARY KEY,
     applied_at DATETIME NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO schema_migrations (version, applied_at) VALUES ('20261106_01', UTC_TIMESTAMP());
+INSERT INTO schema_migrations (version, applied_at) VALUES ('20261120_ota', UTC_TIMESTAMP());

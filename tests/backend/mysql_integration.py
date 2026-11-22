@@ -16,6 +16,7 @@ import uuid
 from unittest.mock import patch
 
 import test_backend as isolated
+import test_ota as isolated_ota
 import pymysql
 import scripts.migrate as migrate
 import app.db.device_storage as storage
@@ -95,6 +96,10 @@ class MySQLDatabase(isolated.Database):
 
 
 class RealMySQLBackendTests(isolated.BackendTests):
+    database_factory = MySQLDatabase
+
+
+class RealMySQLOtaTests(isolated_ota.OtaTests):
     database_factory = MySQLDatabase
 
 
@@ -229,6 +234,7 @@ class MigrationTests(unittest.TestCase):
 if __name__ == "__main__":
     suite = unittest.TestSuite([
         unittest.defaultTestLoader.loadTestsFromTestCase(RealMySQLBackendTests),
+        unittest.defaultTestLoader.loadTestsFromTestCase(RealMySQLOtaTests),
         unittest.defaultTestLoader.loadTestsFromTestCase(MigrationTests),
     ])
     result = unittest.TextTestRunner(verbosity=1, failfast=True).run(suite)

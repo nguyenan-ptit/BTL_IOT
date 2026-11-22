@@ -18,7 +18,9 @@ import { inputClass } from '@/shared/ui/Field'
 import { Sheet } from '@/shared/ui/Sheet'
 import { AttachMqttPanel } from '../components/AttachMqttPanel'
 import { ConnectivityText, LifecyclePill } from '../components/NodeBadges'
+import { NodeOtaCard } from '../components/NodeOtaCard'
 import { useChangeLifecycle, useMoveNode, useNodeCommands } from '../hooks'
+import { isUpdating, useOtaOverview } from '../ota'
 import { canAttachExistingMqtt, maintenanceNoteSchema, toNodeListItem } from '../schemas'
 import {
   allowedTargets,
@@ -46,6 +48,7 @@ export default function NodeDetailPage() {
   const { id = '' } = useParams()
   const devices = useDevices({ refetchInterval: 5_000 })
   const commands = useNodeCommands(id)
+  const ota = useOtaOverview(id)
   const move = useMoveNode(id)
   const lifecycle = useChangeLifecycle(id)
   const [target, setTarget] = useState<DeviceLifecycle | null>(null)
@@ -106,7 +109,11 @@ export default function NodeDetailPage() {
                 <h1 className="tabular text-2xl font-bold tracking-tight">{node.id}</h1>
                 <span className="text-ink-soft">{node.name}</span>
                 <LifecyclePill lifecycle={node.lifecycle} />
-                <ConnectivityText connectivity={node.connectivity} />
+                {isUpdating(ota.data?.job) ? (
+                  <span className="text-sm font-semibold">Đang cập nhật firmware</span>
+                ) : (
+                  <ConnectivityText connectivity={node.connectivity} />
+                )}
               </header>
 
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
@@ -180,6 +187,8 @@ export default function NodeDetailPage() {
                       ))}
                     </dl>
                   </Sheet>
+
+                  <NodeOtaCard key={node.id} item={item} overview={ota} />
 
                   <section aria-labelledby="node-commands" className="flex flex-col gap-3">
                     <h2 id="node-commands" className="text-lg font-bold">

@@ -9,6 +9,7 @@ export const telemetrySchema = z.looseObject({
   boot_id: z.string(),
   seq: z.number().int(),
   system_state: z.string(),
+  ota_supported: z.boolean().optional(),
   backfill: z.boolean().optional(),
   temperature: z.looseObject({
     value_c: z.number().nullable(),

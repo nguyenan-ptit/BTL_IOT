@@ -50,7 +50,7 @@ def control_item(device_id, user, application):
     return item
 
 
-def check_control_request(request: Request):
+def check_control_request(request: Request, content_type="application/json"):
     if request.headers.get("x-iot-request") != "1":
         raise HTTPException(403, "Chỉ nhận lệnh từ trang điều khiển của hệ thống.")
     origin = request.headers.get("origin")
@@ -78,8 +78,9 @@ def check_control_request(request: Request):
             allowed = False
         if not allowed:
             raise HTTPException(403, "Không nhận lệnh từ trang web khác.")
-    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != "application/json":
-        raise HTTPException(415, "Lệnh điều khiển phải là JSON.")
+    if request.headers.get("content-type", "").split(";", 1)[0].strip().lower() != content_type:
+        raise HTTPException(415, "Lệnh điều khiển phải là JSON." if content_type == "application/json"
+                            else "File firmware phải gửi dạng application/octet-stream.")
 
 
 @router.post("/api/devices/{device_id}/thresholds", status_code=202)

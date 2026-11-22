@@ -11,6 +11,7 @@ from app.core.legacy_settings import load_settings
 from app.db.device_storage import StorageError, configure, initialize, session
 
 VERSION = "20261106_01"
+OTA_VERSION = "20261120_ota"
 SCHEMA = Path(__file__).resolve().parents[2] / "database" / "init.sql"
 
 
@@ -33,7 +34,7 @@ def plan(cursor):
     if required - existing:
         raise StorageError("Database không phải schema cũ được hỗ trợ; DB mới dùng database/init.sql")
     changes = []
-    for table in ("device_commands", "mqtt_operations", "schema_migrations"):
+    for table in ("device_commands", "mqtt_operations", "schema_migrations", "firmware_releases", "ota_jobs"):
         if table not in existing:
             changes.append("CREATE TABLE " + table + " " + tables[table])
     cursor.execute("SELECT column_name AS column_name FROM information_schema.columns "
@@ -46,7 +47,8 @@ def plan(cursor):
     cursor.execute("SELECT table_name AS table_name, character_maximum_length AS character_maximum_length, "
                    "is_nullable AS is_nullable FROM information_schema.columns "
                    "WHERE table_schema = DATABASE() AND column_name = 'device_id' "
-                   "AND table_name IN ('devices','history','incidents','device_commands')")
+                   "AND table_name IN ('devices','history','incidents','device_commands',"
+                   "'mqtt_operations','firmware_releases','ota_jobs')")
     widths = cursor.fetchall()
     narrow = [row for row in widths if row["character_maximum_length"] < 64]
     # Preserve actual constraint names/rules while widening the legacy VARCHAR(50) schema.
@@ -58,7 +60,8 @@ def plan(cursor):
         "AND r.table_name = k.table_name WHERE k.table_schema = DATABASE() "
         "AND k.referenced_table_name = 'devices' AND k.referenced_column_name = 'device_id'")
     references = cursor.fetchall()
-    if any(row["table_name"] not in ("history", "incidents", "device_commands", "mqtt_operations")
+    child_tables = ("history", "incidents", "device_commands", "mqtt_operations", "firmware_releases", "ota_jobs")
+    if any(row["table_name"] not in child_tables
            or row["column_name"] != "device_id" for row in references):
         raise StorageError("Có khóa ngoại bổ sung ngoài schema chuẩn; cần kế hoạch migration riêng")
     # Create new tables after width changes; otherwise their new FKs also prevent ALTER.
@@ -70,7 +73,7 @@ def plan(cursor):
             changes.append("ALTER TABLE " + identifier(row["table_name"]) +
                            " MODIFY device_id VARCHAR(64) " + ("NULL" if row["is_nullable"] == "YES" else "NOT NULL"))
     changes += creates
-    for table in ("history", "incidents", "device_commands", "mqtt_operations"):
+    for table in child_tables:
         refs = [row for row in references if row["table_name"] == table]
         if table not in existing:
             continue  # Its canonical CREATE already includes the FK.
@@ -110,8 +113,9 @@ def migrate(*, apply=False):
                 return changes
             for statement in changes:
                 cursor.execute(statement)
-            cursor.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (%s, UTC_TIMESTAMP()) "
-                           "ON DUPLICATE KEY UPDATE version = version", (VERSION,))
+            for version in (VERSION, OTA_VERSION):
+                cursor.execute("INSERT INTO schema_migrations (version, applied_at) VALUES (%s, UTC_TIMESTAMP()) "
+                               "ON DUPLICATE KEY UPDATE version = version", (version,))
         finally:
             cursor.execute("SELECT RELEASE_LOCK(CONCAT('btl_backend_', LEFT(SHA2(DATABASE(), 256), 32)))")
     initialize()

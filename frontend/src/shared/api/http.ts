@@ -82,7 +82,9 @@ export async function request<S extends z.ZodType>(
 ): Promise<z.infer<S>> {
   const { method = 'GET', body, query, headers: extraHeaders, signal } = options
   const headers: Record<string, string> = { ...extraHeaders }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const binary = body instanceof Blob
+  if (body !== undefined)
+    headers['Content-Type'] = binary ? 'application/octet-stream' : 'application/json'
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
   let response: Response
@@ -90,7 +92,7 @@ export async function request<S extends z.ZodType>(
     response = await fetch(buildUrl(path, query), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: binary ? body : body === undefined ? undefined : JSON.stringify(body),
       signal,
     })
   } catch (error) {

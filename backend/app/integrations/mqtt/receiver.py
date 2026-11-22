@@ -5,6 +5,7 @@ import threading
 import paho.mqtt.client as mqtt
 
 from app.db.device_storage import DeviceNotAllowed, DeviceNotRegistered, StorageError, save
+from app.services.ota import STATUS_TOPIC, STATUS_TOPIC_RE
 from app.services.telemetry_validation import validate_message
 
 logger = logging.getLogger("iot_full")
@@ -15,8 +16,11 @@ class Receiver:
     def __init__(self, config, on_accepted=None):
         self.config = config
         self.on_accepted = on_accepted
+        self.on_ota_status = None
+        self.ota_mid = None
         self.lock = threading.Lock()
-        self.status = {"connected": False, "accepted": 0, "rejected": 0, "duplicates": 0, "last_error": None}
+        self.status = {"connected": False, "ota_connected": False, "accepted": 0,
+                       "rejected": 0, "duplicates": 0, "last_error": None}
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
                                   client_id=config.get("mqtt_client_id", "iot-full-backend"))
         self.client.on_connect = self.on_connect
@@ -39,20 +43,38 @@ class Receiver:
             self.status.update(changes)
 
     def on_connect(self, client, userdata, flags, reason_code, properties):
+        self.ota_mid = None
         if reason_code == 0:
-            self.update(connected=False, last_error=None)
+            self.update(connected=False, ota_connected=False, last_error=None)
             client.subscribe(self.config["mqtt_topic"], qos=0)
+            if self.on_ota_status:
+                result, mid = client.subscribe(STATUS_TOPIC, qos=1)
+                if result == mqtt.MQTT_ERR_SUCCESS:
+                    self.ota_mid = mid
         else:
-            self.update(connected=False, last_error="MQTT từ chối kết nối; kiểm tra tài khoản/cấu hình")
+            self.update(connected=False, ota_connected=False,
+                        last_error="MQTT từ chối kết nối; kiểm tra tài khoản/cấu hình")
 
     def on_subscribe(self, client, userdata, mid, reason_codes, properties):
         success = bool(reason_codes) and all(not code.is_failure for code in reason_codes)
+        if mid == self.ota_mid:
+            self.update(ota_connected=success)
+            if not success:
+                logger.warning("Broker rejected the OTA status subscription")
+            return
         self.update(connected=success, last_error=None if success else "MQTT không cho phép nhận topic")
 
     def on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties):
-        self.update(connected=False, last_error="Mất kết nối MQTT; đang thử kết nối lại")
+        self.update(connected=False, ota_connected=False, last_error="Mất kết nối MQTT; đang thử kết nối lại")
 
     def on_message(self, client, userdata, message):
+        if isinstance(message.topic, str) and STATUS_TOPIC_RE.fullmatch(message.topic):
+            if self.on_ota_status:
+                try:
+                    self.on_ota_status(message)
+                except Exception as exc:
+                    logger.error("OTA status processing failed: %s", type(exc).__name__)
+            return
         try:
             topic = TELEMETRY_TOPIC.fullmatch(message.topic) if isinstance(message.topic, str) else None
             if topic is None or message.retain:

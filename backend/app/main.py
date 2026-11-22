@@ -11,6 +11,7 @@ from app.api.routes.device_runtime import router as device_runtime_router
 from app.api.routes.devices import router as devices_router
 from app.api.routes.health import router as health_router
 from app.api.routes.incidents import router as incidents_router
+from app.api.routes.ota import router as ota_router
 from app.api.routes.rooms import houses_router, router as rooms_router
 from app.core.config import settings
 from app.core.lifespan import lifespan
@@ -80,3 +81,4 @@ app.include_router(audit_logs_router)
 app.include_router(accounts_router)
 app.include_router(devices_router)
 app.include_router(device_runtime_router)
+app.include_router(ota_router)

@@ -14,6 +14,17 @@ extern "C" {
 #include "flame_monitor.h"
 #include "device_control.h"
 #include "mqtt_connection_policy.h"
+#include "ota_protocol.h"
+
+#ifndef NODE_FIRMWARE_VERSION
+#define NODE_FIRMWARE_VERSION "node-full-v7-backend-compatible"
+#endif
+#ifndef OTA_ENABLED
+#define OTA_ENABLED 0
+#endif
+#if OTA_ENABLED
+#include "ota_update.h"
+#endif
 
 #ifndef MQTT_USE_TLS
 #define MQTT_USE_TLS 0
@@ -23,13 +34,15 @@ extern "C" {
 #endif
 #if MQTT_USE_TLS
 #include <WiFiClientSecureBearSSL.h>
-#include <time.h>
 #if __has_include("mqtt_ca.h")
 #include "mqtt_ca.h"
 #define MQTT_HAS_CA 1
 #else
 #define MQTT_HAS_CA 0
 #endif
+#endif
+#if MQTT_USE_TLS || OTA_ENABLED
+#include <time.h>
 #endif
 
 // COMMON-CATHODE RGB: common -> GND. One 330-ohm resistor per colour.
@@ -69,9 +82,11 @@ DallasTemperature thermometer(&oneWire);
 #if MQTT_USE_TLS
 BearSSL::WiFiClientSecure transport;
 BearSSL::X509List mqttTrustAnchors;
-bool mqttClockStarted = false;
 #else
 WiFiClient transport;
+#endif
+#if MQTT_USE_TLS || OTA_ENABLED
+bool networkClockStarted = false;
 #endif
 MQTTClient mqtt(1536, 128);
 DeviceControl deviceControl({MQ2_ADC_ALARM_ON, MQ2_ADC_ALARM_OFF,
@@ -97,7 +112,11 @@ uint32_t sequenceNumber = 0;
 char bootId[17];
 char payload[1536];
 char telemetryTopic[96], configSetTopic[96], outputTestTopic[96];
-constexpr char FIRMWARE_VERSION[] = "node-full-v7-backend-compatible";
+constexpr char FIRMWARE_VERSION[] = NODE_FIRMWARE_VERSION;
+static_assert(otaVersionValid(FIRMWARE_VERSION), "Invalid NODE_FIRMWARE_VERSION");
+#if OTA_ENABLED
+OtaUpdate otaUpdate;
+#endif
 IPAddress brokerAddress;
 SystemState state = SystemState::FAULT, lastSentState = SystemState::FAULT;
 
@@ -386,6 +405,10 @@ void deviceMessageReceived(MQTTClient*, char topic[], char bytes[], int length) 
     deviceControl.enqueue(DeviceCommandKind::THRESHOLDS, bytes, static_cast<size_t>(length));
   else if (strcmp(topic, outputTestTopic) == 0)
     deviceControl.enqueue(DeviceCommandKind::OUTPUT_TEST, bytes, static_cast<size_t>(length));
+#if OTA_ENABLED
+  else if (strcmp(topic, otaUpdate.startTopic()) == 0)
+    otaUpdate.enqueue(bytes, static_cast<size_t>(length));
+#endif
 }
 
 void serviceDeviceCommand(uint32_t now) {
@@ -581,6 +604,7 @@ bool makePayload() {
   const char* led = selectDeviceOutputs(state, deviceControl.outputTest.active, millis()).ledName;
   const int n = snprintf(payload, sizeof(payload),
     "{\"schema_version\":6,\"test\":true,\"device_id\":\"%s\",\"room\":\"%s\","
+    "\"firmware_version\":\"%s\",\"ota_supported\":%s,"
     "\"boot_id\":\"%s\",\"seq\":%lu,\"uptime_s\":%llu,\"system_state\":\"%s\","
     "\"led\":\"%s\",\"buzzer_cmd\":%s,"
     "\"temperature\":{\"value_c\":%s,\"health\":\"%s\",\"alarm\":%s},"
@@ -593,7 +617,13 @@ bool makePayload() {
     "\"power_adc_min\":null,\"power_adc_zero\":null},"
     "\"network\":{\"wifi\":%s,\"mqtt\":%s},"
     "\"limits\":{\"temperature_on_c\":%.2f,\"temperature_off_c\":%.2f},%s",
-    DEVICE_ID, ROOM_ID, bootId, static_cast<unsigned long>(sequenceNumber),
+    DEVICE_ID, ROOM_ID, FIRMWARE_VERSION,
+#if OTA_ENABLED
+    otaUpdate.ready() ? "true" : "false",
+#else
+    "false",
+#endif
+    bootId, static_cast<unsigned long>(sequenceNumber),
     static_cast<unsigned long long>(uptimeMs / 1000), stateName(), led,
     buzzerCommand ? "true" : "false", temperature, dsHealth,
     tempAlarm ? "true" : "false", gasLevel, deviceControl.thresholds.values.mq2On, deviceControl.thresholds.values.mq2Off,
@@ -639,11 +669,16 @@ void configureMqtt() {
 
 void serviceNetwork(uint32_t now) {
   if (!networkConfigured || WiFi.status() != WL_CONNECTED || wifiCandidateActive) return;
-#if MQTT_USE_TLS
-  if (!mqttClockStarted) {
+#if OTA_ENABLED
+  if (otaUpdate.pausesMqtt()) return;
+#endif
+#if MQTT_USE_TLS || OTA_ENABLED
+  if (!networkClockStarted) {
     configTime(0, 0, "pool.ntp.org", "time.google.com");
-    mqttClockStarted = true;
+    networkClockStarted = true;
   }
+#endif
+#if MQTT_USE_TLS
   if (!mqttTlsClockReady(static_cast<int64_t>(time(nullptr)))) return;
 #endif
   if (!mqtt.connected()) {
@@ -660,6 +695,9 @@ void serviceNetwork(uint32_t now) {
       mqtt.disconnect();
       return;
     }
+#if OTA_ENABLED
+    otaUpdate.onConnect(mqtt);
+#endif
     mqtt.setTimeout(MQTT_USE_TLS ? 1000 : 100);
     Serial.println("MQTT connected; threshold and output-test subscriptions ready.");
     deviceControl.telemetryDirty = true;
@@ -694,6 +732,9 @@ void setup() {
   snprintf(telemetryTopic, sizeof(telemetryTopic), "iot/devices/%s/telemetry", DEVICE_ID);
   snprintf(outputTestTopic, sizeof(outputTestTopic), "iot/devices/%s/buzzer/test", DEVICE_ID);
   deviceControl.begin();
+#if OTA_ENABLED
+  otaUpdate.begin(DEVICE_ID, FIRMWARE_VERSION, bootId, deviceControl.storage.ready, MQTT_USE_TLS);
+#endif
   previousMillis = millis();
   mqCandidateSince = previousMillis;
   lastMqSample = previousMillis - MQ_SAMPLE_MS; // Sample A0 on the first loop.
@@ -716,6 +757,13 @@ void loop() {
   sampleAndControl(); // DNS/TCP/TLS calls are synchronous; refresh outputs afterwards.
   serviceDeviceCommand(millis());
   sampleAndControl();
+#if OTA_ENABLED
+  const bool otaPausedMqtt = otaUpdate.pausesMqtt();
+  otaUpdate.service(mqtt, uptimeMs / 1000, state == SystemState::ALARM,
+                    deviceControl.outputTest.active || wifiCandidateActive);
+  if (otaPausedMqtt && !otaUpdate.pausesMqtt()) lastNetworkTry = millis() - NETWORK_RETRY_MS;
+  sampleAndControl();
+#endif
   const uint32_t now = millis();
   const bool due = now - lastSend >= DEFAULT_SEND_INTERVAL_MS || state != lastSentState || deviceControl.telemetryDirty;
   if (mqtt.connected() && due) {

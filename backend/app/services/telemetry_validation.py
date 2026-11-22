@@ -84,6 +84,7 @@ def validate_message(raw):
     require(isinstance(raw, bytes) and len(raw) <= 4096, "Kích thước bản tin không hợp lệ")
     data = json.loads(raw.decode("utf-8"))
     require(type(data) is dict, "Bản tin phải là JSON object")
+    require(type(data.get("ota_supported", False)) is bool, "ota_supported phải là boolean")
     measurement_time(data, datetime.now(timezone.utc))
     for key, maximum in (("hardware_version", 32), ("firmware_version", 64)):
         if key in data:

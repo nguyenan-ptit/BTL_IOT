@@ -12,8 +12,19 @@ from app.integrations.mqtt.buzzer_control import BuzzerController
 from app.integrations.mqtt.discovery import DiscoveryResponder
 from app.integrations.mqtt.receiver import Receiver
 from app.integrations.mqtt.remote_control import RemoteController
+from app.services.ota import OtaController
 
 logger = logging.getLogger("iot_full")
+
+
+class OtaAccessLogFilter(logging.Filter):
+    def filter(self, record):
+        # Uvicorn access arguments include the request target, including query parameters.
+        args = record.args
+        if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
+            if args[2].startswith("/api/ota/download/"):
+                record.args = (*args[:2], args[2].split("?", 1)[0], *args[3:])
+        return True
 
 
 @asynccontextmanager
@@ -23,12 +34,20 @@ async def lifespan(app):
         raise ValueError("Cần JWT_SECRET ít nhất 32 ký tự từ dịch vụ tài khoản")
     # The legacy device API verifier reads this environment variable directly.
     os.environ["JWT_SECRET"] = settings.jwt_secret_key
-    configure_storage(settings.mysql_config)
+    configure_storage(config["mysql"])
     with backend_guard() as guard:
         initialize()
         recover_commands()
         app.state.config = config
         app.state.receiver = Receiver(config)
+        app.state.ota = OtaController(app.state.receiver.client, settings.ota_public_origin,
+                                      settings.ota_public_key, settings.jwt_secret_key)
+        app.state.ota.check_schema()
+        access_logger = logging.getLogger("uvicorn.access")
+        access_filter = OtaAccessLogFilter()
+        if app.state.ota.enabled:
+            app.state.receiver.on_ota_status = app.state.ota.observe
+            access_logger.addFilter(access_filter)
         app.state.remote_control = RemoteController(app.state.receiver.client)
         app.state.buzzer_control = BuzzerController(app.state.receiver.client)
         app.state.emqx_admin = EmqxAdmin({**config["emqx_admin"],
@@ -64,6 +83,11 @@ async def lifespan(app):
                     expire_commands()
                 except StorageError:
                     logger.error("Cannot expire untracked commands; will retry")
+                try:
+                    broker = app.state.receiver.snapshot()
+                    app.state.ota.tick(broker["connected"] and broker.get("ota_connected", False))
+                except Exception as exc:
+                    logger.error("OTA worker error: %s", type(exc).__name__)
 
         worker = threading.Thread(target=reconcile_timeouts, name="command-journal", daemon=True)
         app.state.discovery = DiscoveryResponder(config, lambda: app.state.receiver.snapshot()["connected"])
@@ -74,6 +98,7 @@ async def lifespan(app):
             yield
         finally:
             stop_worker.set()
+            access_logger.removeFilter(access_filter)
             app.state.discovery.stop()
             app.state.receiver.stop()
             if worker.ident is not None:

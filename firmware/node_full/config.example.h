@@ -26,6 +26,17 @@ constexpr char MQTT_PASSWORD[] = "CHANGE_ME";
 constexpr char DEVICE_ID[] = "node01";
 constexpr char ROOM_ID[] = "101";
 
+// Change for each build. Reported automatically in telemetry.
+#define NODE_FIRMWARE_VERSION "node-full-v7-backend-compatible"
+
+// Enable on BOTH builds of an OTA demo. Use the same device ID and trust anchors.
+#define OTA_ENABLED 0
+#if OTA_ENABLED
+constexpr char OTA_DOWNLOAD_HOST[] = "firmware.example.com"; // HTTPS port 443
+constexpr char OTA_DOWNLOAD_CA_PEM[] = "";  // PEM CA for that HTTPS origin
+constexpr char OTA_SIGNING_PUBLIC_KEY_PEM[] = ""; // PEM RSA-2048 public key
+#endif
+
 // MQ-2 AO -> 47k -> A0 junction; junction -> 10k -> common GND.
 // A0 belongs ONLY to MQ-2; DO is disconnected. Never connect AO/5V directly to A0.
 // These thresholds are raw ADC counts, not ppm.

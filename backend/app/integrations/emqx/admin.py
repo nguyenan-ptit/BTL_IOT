@@ -97,7 +97,8 @@ class EmqxAdmin:
         prefix = "iot/devices/" + device_id
         rules = [{"permission": "allow", "action": action, "topic": prefix + suffix}
                  for action, suffix in (("publish", "/telemetry"), ("subscribe", "/config/set"),
-                                        ("subscribe", "/buzzer/test"))]
+                                        ("subscribe", "/buzzer/test"), ("subscribe", "/ota/start"),
+                                        ("publish", "/ota/status"))]
         self.set_rules(username, rules + DENY_RULES)
 
     def put_user(self, username, password):

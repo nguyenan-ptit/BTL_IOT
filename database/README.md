@@ -15,7 +15,7 @@ SOURCE database/seed_demo.sql;
 SOURCE database/test_data.sql;
 ~~~
 
-init.sql tạo 12 bảng gồm registry, history, lệnh, audit, mqtt_operations và schema_migrations. Không chạy lại init.sql trên DB đã có bảng. Không xóa DB vận hành để nâng cấp.
+init.sql tạo các bảng registry, history, lệnh, audit, MQTT và OTA. Không chạy lại init.sql trên DB đã có bảng. Không xóa DB vận hành để nâng cấp.
 
 seed_demo.sql tạo node01/node02 active/active để thử ingestion, nhưng mqtt_sync_status vẫn unknown: dữ liệu mẫu không chứng minh broker đã cấp tài khoản. test_data.sql dùng admin=1001, owner=1002, tenant=1003, phòng T-OWN. Các tài khoản mẫu locked và hash không phải mật khẩu thật; người 3 chuẩn bị tài khoản đăng nhập trước khi chạy smoke test với token thật.
 
@@ -30,6 +30,10 @@ Dừng backend và sao lưu bằng công cụ MySQL trước khi --apply. MySQL 
 ~~~
 
 Migration 20261106_01 hỗ trợ hai schema tại commit f6f2e7b: init.sql và init_db.sql cũ. Nó thêm các cột đồng bộ MQTT và bảng thao tác/mốc migration, tạo device_commands nếu thiếu, nâng device_id VARCHAR(50) thành VARCHAR(64) trong schema cũ, giữ/ràng buộc lại khóa ngoại và bảo đảm khóa chống trùng toàn bộ device_id + boot_id + seq. Không xóa dòng telemetry, tài khoản, sự cố, lệnh hoặc audit. Nếu phát hiện mẫu trùng hay cấu trúc ngoài phạm vi hỗ trợ, công cụ dừng để xử lý riêng.
+
+Migration 20261120_ota thêm `firmware_releases` và `ota_jobs`. Chạy migration
+trước khi cấu hình OTA ở backend. Bản firmware có thể chứa thông tin kết nối
+của node nên cần bảo vệ bản sao lưu MySQL. Xem [cấu hình OTA](../docs/OTA_CONTRACT.md#bật-ota-ở-backend).
 
 --check chỉ đọc và hiển thị kế hoạch. --apply chạy lại được: chỉ thêm phần còn thiếu rồi kiểm tra schema. Khóa MySQL ngăn chạy migration đồng thời với backend khác. Cờ version chỉ ghi sau khi DDL hoàn tất; backend kiểm tra cả mốc migration lẫn các cột thực tế trước khi chạy.
 

@@ -803,7 +803,8 @@ class AdapterAndTransactionTests(unittest.TestCase):
             admin.allow_device("u_node01", "node01")
         rules = set_rules.call_args.args[1]
         self.assertEqual([row["topic"] for row in rules if row["permission"] == "allow"],
-                         ["iot/devices/node01/telemetry", "iot/devices/node01/config/set", "iot/devices/node01/buzzer/test"])
+                         ["iot/devices/node01/telemetry", "iot/devices/node01/config/set", "iot/devices/node01/buzzer/test",
+                          "iot/devices/node01/ota/start", "iot/devices/node01/ota/status"])
         self.assertTrue(any(row["permission"] == "deny" and row["topic"] == "#" for row in rules))
 
     def test_http_timeout_and_error_responses_do_not_expose_secrets(self):

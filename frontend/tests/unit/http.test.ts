@@ -78,4 +78,18 @@ describe('request() với Bearer token', () => {
     expect(headers.get('X-IoT-Request')).toBe('1')
     expect(headers.get('Content-Type')).toBe('application/json')
   })
+
+  it('gửi nguyên bytes khi upload file firmware', async () => {
+    const file = new File([new Uint8Array([0xe9, 0x00, 0xff])], 'node.bin')
+    fetchMock.mockResolvedValue(jsonResponse(201, {}))
+    await request('/api/firmware', z.object({}), {
+      method: 'POST',
+      query: { device_id: 'node10', version: 'v1.0.1' },
+      headers: CONTROL_HEADERS,
+      body: file,
+    })
+    expect(fetchMock.mock.calls.at(-1)![0]).toBe('/api/firmware?device_id=node10&version=v1.0.1')
+    expect(lastInit().body).toBe(file)
+    expect(new Headers(lastInit().headers).get('Content-Type')).toBe('application/octet-stream')
+  })
 })
