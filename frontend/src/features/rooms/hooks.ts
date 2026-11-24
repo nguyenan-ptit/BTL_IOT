@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useDevices } from '@/features/devices/hooks'
-import type { Telemetry } from '@/features/devices/schemas'
 import { fetchBoardingHouses, fetchRooms, fetchRoomStatuses, roomKeys } from './api'
 import { computeRoomOverall, sortRooms } from './overall'
 import { groupRoomsByHouse, roomLabelMap } from './group'
-import { sensorViews } from './sensors'
+import { roomNodeViews } from './sensors'
 
 /** Hỏi lại mỗi 3 giây để trạng thái mới lên màn hình trong 5 giây (FR-010, research R3). */
 export const LIVE_REFETCH_MS = 3_000
@@ -48,22 +47,33 @@ export function useRoomOverview() {
     refetchIntervalInBackground: false,
   })
   const devices = useDevices()
-  const telemetryOf = (nodeId: string): Telemetry | null =>
-    devices.data?.find((d) => d.device_id === nodeId)?.data ?? null
+  const devicesById = new Map(devices.data?.map((device) => [device.device_id, device]))
   const items = rooms.data
     ? sortRooms(
         rooms.data.map((status) => {
-          const telemetry = status.node ? telemetryOf(status.node.id) : null
-          // /api/rooms/status không trả node bị khoá; tìm trong /api/devices để hiện "Tạm khoá".
-          const blockedNode =
-            devices.data?.find(
-              (d) => d.room_id === status.room.id && d.lifecycle_status === 'blocked',
-            ) ?? null
+          const nodes = roomNodeViews(status, (id) => {
+            const device = devicesById.get(id)
+            return device?.room_id === status.room.id ? device.data : null
+          })
+          if (status.nodes === undefined) {
+            // API cũ không trả node bị khoá trong trạng thái phòng.
+            for (const device of devicesById.values()) {
+              if (device.room_id === status.room.id && device.lifecycle_status === 'blocked') {
+                nodes.push({
+                  id: device.device_id,
+                  code: device.device.device_name,
+                  lifecycle: 'blocked',
+                  connectivity: 'offline',
+                  lastSeenAt: null,
+                  sensors: [],
+                })
+              }
+            }
+          }
           return {
             status,
-            sensors: sensorViews(status, telemetry),
-            overall: computeRoomOverall(status, telemetry, blockedNode !== null),
-            blockedNodeId: blockedNode?.device_id ?? null,
+            nodes,
+            overall: computeRoomOverall(status, nodes),
           }
         }),
       )

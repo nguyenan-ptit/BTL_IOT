@@ -1,27 +1,20 @@
-import type { Telemetry } from '@/features/devices/schemas'
 import type { RoomOverall } from '@/shared/schemas/common'
 import type { RoomStatus } from './schemas'
-import { isFault, sensorViews } from './sensors'
+import { isFault, roomNodeViews } from './sensors'
 
 /**
- * Trạng thái tổng của phòng (FR-007, data-model.md). Gặp điều kiện nào trước thì lấy:
- * chưa có thiết bị > cảnh báo > bảo trì > mất kết nối > lỗi cảm biến > bình thường.
- * `telemetry` (từ /api/devices) giúp phân biệt MQ-2 đang làm nóng với lỗi thật.
+ * Cảnh báo thuộc về phòng. Với các trạng thái còn lại, xét các node đang giám sát trước.
  */
-export function computeRoomOverall(
-  status: RoomStatus,
-  telemetry: Telemetry | null = null,
-  /** Phòng có node đang bị khoá (/api/rooms/status không trả node bị khoá). */
-  blockedNode = false,
-): RoomOverall {
-  const { node } = status
-  if (!node && blockedNode) return 'blocked'
-  if (!node || node.lifecycle === 'registered' || node.lifecycle === 'retired') return 'no_device'
+export function computeRoomOverall(status: RoomStatus, nodes = roomNodeViews(status)): RoomOverall {
   if (status.activeIncidentId !== null || status.hazardSigns.length > 0) return 'alarm'
-  if (node.lifecycle === 'maintenance') return 'maintenance'
-  if (node.connectivity === 'offline') return 'offline'
-  if (sensorViews(status, telemetry).some((s) => isFault(s.state))) return 'sensor_fault'
-  return 'normal'
+  const active = nodes.filter((node) => node.lifecycle === 'active')
+  if (active.some((node) => node.connectivity === 'offline')) return 'offline'
+  if (active.some((node) => node.sensors.some((sensor) => isFault(sensor.state))))
+    return 'sensor_fault'
+  if (active.length > 0) return 'normal'
+  if (nodes.some((node) => node.lifecycle === 'maintenance')) return 'maintenance'
+  if (nodes.some((node) => node.lifecycle === 'blocked')) return 'blocked'
+  return 'no_device'
 }
 
 const ORDER: RoomOverall[] = [

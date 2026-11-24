@@ -1,6 +1,6 @@
-# Bàn giao backend/API/MySQL và tích hợp nhóm — 07/11/2026
+# Bàn giao backend/API/MySQL và tích hợp nhóm
 
-Repo hiện có firmware hai node, backend FastAPI/MySQL và frontend React dùng mock. Luồng ESP → EMQX Cloud → BE → MySQL đã được quan sát với node01/node02 trong buổi test local. Mã và kiểm thử phần Long đã có, nhưng quản trị tài khoản MQTT tự động trên deployment hiện tại, đăng nhập/frontend thực tế và deployment chung chưa hoàn tất.
+Repo có firmware ESP8266, backend FastAPI/MySQL và frontend React gọi API để đăng nhập, xem dữ liệu và quản lý thiết bị. Luồng ESP → EMQX Cloud → BE → MySQL đã được quan sát với node01/node02 trong buổi test local. Các kết quả kiểm thử bên dưới thuộc mốc bàn giao tháng 11/2026.
 
 Người nhận bắt đầu từ [RUN_BACKEND_WINDOWS](RUN_BACKEND_WINDOWS.md). [HANDOVER_SUMMARY](HANDOVER_SUMMARY.md) là bản ngắn có thể gửi nhóm; [LONG_IMPLEMENTATION_STATUS](LONG_IMPLEMENTATION_STATUS.md) phân biệt code, kiểm thử và việc còn thiếu. Không dùng tài liệu P1/SQLite lịch sử làm hướng dẫn chạy BE hiện tại.
 
@@ -24,16 +24,14 @@ Thông tin Cloud và settings.local.json không nằm trong Git. Người nhận
 
 ## Phân công tích hợp và phần còn thiếu
 
-- **Long:** cấu hình/kiểm chứng API quản trị broker tương thích, topic ACL và tài khoản riêng từng node; hoàn tất cấp/thu hồi/cấp lại trên broker thật. Deployment hiện tại chưa hỗ trợ adapter này: API báo incomplete và node vẫn bị chặn tại BE. Không tính thao tác xóa tài khoản thủ công là thu hồi tự động đã hoàn tất.
-- **Vĩ:** dịch vụ đăng ký/đăng nhập người dùng, băm mật khẩu, JWT, trạng thái và vai trò tài khoản. BE của Long không có API tự đăng ký/đăng nhập; các user test có hash giả không thay thế dịch vụ này.
-- **Long + Vĩ:** thống nhất users, houses.owner_id, room_users và các claim JWT user_id (int), role, exp; cùng khóa ký HS256. BE kiểm tra lại status/role/phạm vi DB. Khóa trao đổi riêng qua cấu hình runtime.
-- **Nguyên + Long/Vĩ:** đối chiếu hợp đồng frontend mock (/api/nodes, /api/auth/*) với LONG_API và dịch vụ tài khoản, tích hợp response/token/mã lỗi rồi mới tắt mock. Trang backend/app/static/dashboard.html là trang thử API riêng.
-- **An + Long:** đối chiếu MQTT username thực tế từng ESP với registry và policy; nạp username/mật khẩu mới khi cấp/cấp lại. Nghiệm thu ngưỡng, ACK, đầu ra vật lý và mất mạng/phục hồi theo từng node.
-- **Nhóm:** triển khai BE, MySQL, broker, dịch vụ tài khoản và web với địa chỉ/HTTPS thống nhất. Hiện cấu hình chạy local 127.0.0.1:8000 chưa phải dịch vụ để thành viên khác truy cập.
+- **Nguyễn Văn An:** phụ trách phần cứng, firmware ESP8266 và cập nhật firmware qua mạng (FOTA). Cấu hình kết nối MQTT trên từng node, nghiệm thu ngưỡng, ACK, còi, LED và khả năng phục hồi kết nối.
+- **Đặng Kỳ Vĩ:** phụ trách backend, đăng nhập, xác thực, JWT và quản lý trạng thái, vai trò người dùng.
+- **Vũ Thành Nguyên:** phụ trách frontend React, tích hợp API, luồng đăng nhập và cơ sở dữ liệu MySQL. Xem [hướng dẫn frontend](../frontend/README.md).
+- **Nhóm:** thống nhất địa chỉ truy cập frontend, backend, MySQL và broker khi triển khai. Xem [hướng dẫn FOTA](OTA_CONTRACT.md) để cấu hình HTTPS cho endpoint tải firmware.
 
 Giữ chống trùng toàn bộ device_id + boot_id + seq, UTC và dữ liệu phòng lịch sử khi tích hợp. Dữ liệu mẫu test:true/prototype:true chưa được chuyển thành vận hành chính thức. Đăng ký node registered/pending chỉ lưu tham chiếu username, không tự tạo/xác nhận tài khoản EMQX; luồng xác nhận cấp thủ công cho node mới trên Serverless hiện chưa có.
 
-Phần sự cố/thông báo phối hợp với Vĩ và giao diện với Nguyên. Lượt thử còi/đèn có thể đỏ/còi bật nhưng system_state vẫn normal/fault; không tạo sự cố cháy chỉ từ màu LED hoặc buzzer_cmd. Toàn bộ checklist Long vẫn chưa được đánh dấu hoàn thành khi còn các mục tích hợp/nghiệm thu nêu trên.
+Nghiệm thu quản trị broker cần đối chiếu API, ACL và tài khoản MQTT riêng của từng node. Bản triển khai thiếu API quản trị tương thích trả `incomplete` và backend giữ node ở trạng thái bị chặn khi đã bắt đầu thu hồi. Với luồng sự cố, xác nhận `system_state` trước khi ghi nhận cảnh báo. Lượt thử đầu ra có thể bật LED đỏ và còi trong trạng thái `normal` hoặc `fault`.
 
 ## Nghiệm thu chung trước khi tích hợp
 
@@ -46,12 +44,12 @@ Phần sự cố/thông báo phối hợp với Vĩ và giao diện với Nguyê
 | Ưu tiên cảnh báo | Cảnh báo thật được giữ khi dừng thử hoặc một cảm biến bị lỗi; không dùng lửa/rò khí thật để thử phần mềm. |
 | Lỗi cảm biến | Đối chiếu null/health và sơ đồ; MQ-2 hiện chưa chẩn đoán đầy đủ mất nguồn/đứt AO. |
 
-Chỉ đưa dữ liệu mô phỏng vào broker/database thử riêng của Long. Bản tin được ESP xác nhận vẫn cần phân biệt với nghiệm thu âm thanh, đèn, dây và nguồn trên mạch thật.
+Đưa dữ liệu mô phỏng vào broker và database thử. Khi nghiệm thu, ghi riêng phản hồi của ESP và kết quả quan sát âm thanh, đèn, dây và nguồn trên mạch thật.
 
 ## Công khai và bảo mật
 
-Repo công khai chỉ chứa cấu hình mẫu. config.h, mqtt_ca.h cục bộ, discovery_key.h, mật khẩu, khóa thật, database vận hành và binary nhúng cấu hình riêng không thuộc gói công khai. CA nhà cung cấp là chứng chỉ công khai, không phải private key. Long tự tạo cấu hình cục bộ; không dựa vào đường dẫn máy cá nhân của người bàn giao.
+Repo công khai chỉ chứa cấu hình mẫu. config.h, mqtt_ca.h cục bộ, discovery_key.h, mật khẩu, khóa thật, database vận hành và binary nhúng cấu hình riêng không thuộc gói công khai. Mỗi thành viên tạo cấu hình cục bộ theo môi trường của mình.
 
-Firmware mặc định giữ MQTT TCP/IPv4 trong LAN và hỗ trợ cloud TLS 1.2 bằng lựa chọn `MQTT_USE_TLS=1`. Chế độ cloud kiểm tra hostname/chứng chỉ theo CA và thời gian SNTP, không tự chuyển sang TCP thường khi thất bại; signed discovery chỉ dành cho LAN. Long/người 3 tiếp tục thống nhất phân quyền lệnh, HTTPS/API và lưu dữ liệu bền vững; xem [CLOUD_MQTT](CLOUD_MQTT.md).
+Firmware mặc định giữ MQTT TCP/IPv4 trong LAN và hỗ trợ cloud TLS 1.2 bằng lựa chọn `MQTT_USE_TLS=1`. Chế độ cloud kiểm tra hostname/chứng chỉ theo CA và thời gian SNTP, không tự chuyển sang TCP thường khi thất bại; signed discovery chỉ dành cho LAN. Xem [hướng dẫn MQTT qua TLS](CLOUD_MQTT.md).
 
 Các bộ native/build TLS không tự chứng minh hai node đã nghiệm thu. Bằng chứng nhận telemetry thật trong buổi test local là một mốc riêng, chưa xác nhận toàn bộ luồng cấp quyền/điều khiển/đầu ra. DNS/TCP/TLS handshake đồng bộ có thể làm chậm lấy mẫu; cần đo độ trễ, heap và kiểm tra lỗi chứng chỉ trên dịch vụ/thiết bị thật. Xem [TEST_STATUS](TEST_STATUS.md) cho firmware và [LONG_IMPLEMENTATION_STATUS](LONG_IMPLEMENTATION_STATUS.md) cho BE.

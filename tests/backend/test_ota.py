@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -25,7 +26,7 @@ class OtaTests(unittest.TestCase):
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.directory.cleanup)
-        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        key = cls.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         cls.key_path = Path(cls.directory.name) / "public.pem"
         cls.key_path.write_bytes(key.public_key().public_bytes(
             serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
@@ -66,10 +67,18 @@ class OtaTests(unittest.TestCase):
         self.published.append((topic, command, options))
         return SimpleNamespace(rc=0)
 
-    def upload(self, image=None, role="admin", device="node01"):
-        return self.client.post("/api/firmware", params={"device_id": device, "version": "v1.0.1"},
-                                content=self.signed if image is None else image,
-                                headers={**self.headers[role], "Content-Type": "application/octet-stream"})
+    def manifest(self, device="node01", version="v1.0.1", image=None):
+        digest = hashlib.sha256(self.signed if image is None else image).hexdigest()
+        payload = f"iot-fota-manifest-v1\n{device}\n{version}\n{digest}".encode("ascii")
+        signature = self.key.sign(payload, padding.PKCS1v15(), hashes.SHA256()).hex()
+        return f"{device}:{version}:{digest}:{signature}"
+
+    def upload(self, image=None, role="admin", device="node01", version="v1.0.1", manifest="auto"):
+        headers = {**self.headers[role], "Content-Type": "application/octet-stream"}
+        if manifest is not None:
+            headers["X-IoT-Firmware-Manifest"] = self.manifest(image=image) if manifest == "auto" else manifest
+        return self.client.post("/api/firmware", params={"device_id": device, "version": version},
+                                content=self.signed if image is None else image, headers=headers)
 
     def start(self, firmware, device="node01"):
         return self.client.post(f"/api/devices/{device}/ota", headers=self.headers["admin"],
@@ -100,6 +109,24 @@ class OtaTests(unittest.TestCase):
         self.assertEqual(self.start(firmware["firmware_id"], device="node02").status_code, 404)
         listing = self.client.get("/api/firmware?device_id=node01", headers=self.headers["admin"])
         self.assertEqual(listing.json()["items"], [firmware])
+
+    def test_upload_rejects_missing_or_mismatched_manifest(self):
+        valid = self.manifest()
+        cases = [
+            ({"manifest": None}, "Cần đúng một manifest"),
+            ({"manifest": "invalid"}, "Định dạng manifest"),
+            ({"manifest": valid.replace("node01:", "node02:", 1)}, "Chữ ký manifest"),
+            ({"manifest": self.manifest(device="node02")}, "Firmware dành cho node02"),
+            ({"version": "v1.0.1.0"}, "Firmware là bản v1.0.1"),
+            ({"manifest": self.manifest(image=b"different binary")}, "mã SHA-256"),
+        ]
+        for arguments, message in cases:
+            with self.subTest(message=message):
+                response = self.upload(**arguments)
+                self.assertEqual(response.status_code, 422)
+                self.assertIn(message, response.json()["message"])
+        listing = self.client.get("/api/firmware?device_id=node01", headers=self.headers["admin"])
+        self.assertEqual(listing.json()["items"], [])
 
     def test_full_job_rejects_forged_or_stale_confirmation(self):
         firmware = self.upload().json()

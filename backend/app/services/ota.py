@@ -21,6 +21,7 @@ MAX_IMAGE_BYTES = 1024 * 1024
 STATUS_TOPIC = "iot/devices/+/ota/status"
 DEVICE_PATTERN = r"[A-Za-z0-9_-]{1,32}"
 VERSION_PATTERN = r"[A-Za-z0-9._-]{1,64}"
+MANIFEST_RE = re.compile(rf"({DEVICE_PATTERN}):({VERSION_PATTERN}):([a-f0-9]{{64}}):([a-f0-9]{{512}})")
 STATUS_TOPIC_RE = re.compile(rf"iot/devices/({DEVICE_PATTERN})/ota/status")
 BOOT_RE = re.compile(r"[a-f0-9]{16}")
 ID_RE = re.compile(r"[a-f0-9]{32}")
@@ -118,7 +119,26 @@ class OtaController:
         except InvalidSignature:
             raise HTTPException(422, "Chữ ký firmware không hợp lệ.") from None
 
-    def add_release(self, device_id, version, image, user):
+    def verify_manifest(self, manifest, device_id, version, sha256):
+        match = MANIFEST_RE.fullmatch(manifest)
+        if not match:
+            raise HTTPException(422, "Định dạng manifest firmware không hợp lệ.")
+        signed_device, signed_version, signed_sha256, signature = match.groups()
+        payload = f"iot-fota-manifest-v1\n{signed_device}\n{signed_version}\n{signed_sha256}".encode("ascii")
+        try:
+            self.public_key.verify(bytes.fromhex(signature), payload, padding.PKCS1v15(), hashes.SHA256())
+        except InvalidSignature:
+            raise HTTPException(422, "Chữ ký manifest firmware không hợp lệ.") from None
+        if signed_device != device_id:
+            raise HTTPException(422, f"Firmware dành cho {signed_device}, bạn đang chọn {device_id}.")
+        if signed_version != version:
+            raise HTTPException(422, f"Firmware là bản {signed_version}, bạn đã nhập {version}.")
+        if signed_sha256 != sha256:
+            raise HTTPException(422, "File .bin không khớp với mã SHA-256 trong manifest.")
+
+    def add_release(self, device_id, version, image, manifest, user):
+        sha256 = hashlib.sha256(image).hexdigest()
+        self.verify_manifest(manifest, device_id, version, sha256)
         self.verify_image(image)
         firmware_id = uuid4().hex
         with storage.session() as cursor:
@@ -135,7 +155,7 @@ class OtaController:
                 "INSERT INTO firmware_releases (firmware_id, device_id, version, board_model, hardware_version, "
                 "size_bytes, sha256, image) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                 (firmware_id, device_id, version, device["board_model"], device["hardware_version"],
-                 len(image), hashlib.sha256(image).hexdigest(), image))
+                 len(image), sha256, image))
             storage.audit(cursor, user["user_id"], device["room_id"], "OTA_UPLOAD", device_id,
                           {"firmware_id": firmware_id, "version": version})
             cursor.execute(f"SELECT {RELEASE_FIELDS} FROM firmware_releases WHERE firmware_id = %s", (firmware_id,))

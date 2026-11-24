@@ -26,7 +26,7 @@ A0 chỉ đọc MQ-2; không ghép thêm nhánh nguồn Flame vào A0. D1 là đ
 | MQ-2 lọc trạng thái | 300 ms |
 | Flame mức kích DO | LOW; phải xác nhận trên module thật |
 | Flame nguồn ổn định / lọc DO | 300 / 100 ms |
-| Còi khi thử/báo động | PWM 2 kHz, xấp xỉ 50% trên D5 |
+| Còi khi thử/báo động | D5 ở mức LOW khi firmware bật còi |
 | Còi lúc nghỉ | HIGH theo cấu hình hiện tại; đây là cấu hình phần mềm, chưa thay thế xác nhận âm thanh thực tế |
 | Telemetry | Khoảng 2 giây/lần và khi trạng thái thay đổi |
 | Thử còi + đỏ nhấp nháy | 3 giây; cảnh báo thật luôn ưu tiên |

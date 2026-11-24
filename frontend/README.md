@@ -1,6 +1,6 @@
 # Frontend: website giám sát cháy/gas nhà trọ
 
-React 19 + TypeScript + Tailwind CSS 4, Zod, nuqs, TanStack Query, React Router, chạy bằng Vite. Đặc tả nằm ở `specs/001-web-giam-sat-canh-bao/`.
+React 19 + TypeScript + Tailwind CSS 4, Zod, nuqs, TanStack Query, React Router, chạy bằng Vite.
 
 Website gọi backend FastAPI/MySQL trong `backend/` (xem [API backend](../docs/LONG_API.md) và Swagger `http://<máy-backend>:8000/docs`). Không còn chế độ dữ liệu giả lập.
 
@@ -13,12 +13,11 @@ Website gọi backend FastAPI/MySQL trong `backend/` (xem [API backend](../docs/
 
 ```powershell
 cd frontend
-npm install
-copy .env.example .env.local     # macOS/Linux: cp .env.example .env.local
-npm run dev
+npm ci
+Copy-Item .env.example .env.local # macOS/Linux: cp .env.example .env.local
 ```
 
-Trong `.env.local`, đặt `VITE_API_BASE_URL` là địa chỉ backend (mặc định `http://127.0.0.1:8000`). Mở http://localhost:5173 rồi đăng nhập bằng tài khoản có trong MySQL của backend.
+Trong `.env.local`, đặt `VITE_API_BASE_URL` là địa chỉ backend. File mẫu dùng `http://127.0.0.1:8000`. Chạy `npm run dev`, mở http://localhost:5173 và đăng nhập bằng tài khoản đang hoạt động trong MySQL của backend.
 
 ## Lệnh
 
@@ -37,7 +36,7 @@ Trong `.env.local`, đặt `VITE_API_BASE_URL` là địa chỉ backend (mặc �
 
 - Đăng nhập trả token Bearer; website lưu token trong `sessionStorage` của tab (F5 vẫn còn, đóng tab thì phải đăng nhập lại) và gắn `Authorization: Bearer …` vào mọi request.
 - Khi dev, Vite chuyển mọi request `/api` sang `VITE_API_BASE_URL` (proxy) và bỏ header `Origin`, vì lệnh điều khiển node của backend (ngưỡng, thử còi) chỉ nhận Origin trùng địa chỉ backend.
-- Route của Vĩ (`/api/auth`, `/api/rooms`, `/api/incidents`, `/api/users`, `/api/audit-logs`) dùng thẳng. Route của Long (`/api/devices*`, `/api/history`) được chuyển sang kiểu dữ liệu của website trong `src/features/devices/`.
+- Frontend gọi trực tiếp các nhóm API xác thực, phòng, sự cố, tài khoản và nhật ký. Dữ liệu từ `/api/devices*` và `/api/history` được chuyển sang kiểu dữ liệu của website trong `src/features/devices/`.
 - Trường nào lệch, console báo "Response của … không khớp hợp đồng".
 
 Triển khai trên Vercel: `vercel.json` chuyển `/api/*` sang địa chỉ backend (rewrite đầu tiên) và trả `index.html` cho mọi đường dẫn khác. Địa chỉ `trycloudflare.com` đổi mỗi lần chạy lại tunnel, nên khi đổi phải sửa `destination` trong `vercel.json` rồi chạy lại `npx vercel --prod`. Qua Vercel, lệnh gửi ngưỡng và thử còi bị backend trả 403 vì Origin khác địa chỉ backend; các chức năng xem dữ liệu vẫn chạy.

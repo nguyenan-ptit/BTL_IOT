@@ -1,5 +1,5 @@
 import type { Telemetry } from '@/features/devices/schemas'
-import type { RoomStatus, SensorReading } from './schemas'
+import type { RoomNodeStatus, RoomStatus, SensorReading } from './schemas'
 
 /**
  * Số đo gas/khói (ADC MQ-2) dưới mức này coi là lỗi cảm biến: MQ-2 còn nguồn và dây tín hiệu
@@ -27,7 +27,10 @@ export function isFault(state: SensorState): boolean {
  * /api/rooms/status gộp mọi health khác "ok" thành "fault", kể cả lúc MQ-2 đang làm nóng,
  * nên ghép thêm telemetry gốc từ /api/devices (data.mq2.health, warmup_remaining_s) cho đúng.
  */
-export function sensorViews(status: RoomStatus, telemetry: Telemetry | null): SensorView[] {
+export function sensorViews(
+  status: { node: { id: string } | null; sensors: SensorReading[] },
+  telemetry: Telemetry | null,
+): SensorView[] {
   const own = telemetry && status.node && telemetry.device_id === status.node.id ? telemetry : null
   return status.sensors.map((sensor) => {
     const view: SensorView = {
@@ -50,4 +53,17 @@ export function sensorViews(status: RoomStatus, telemetry: Telemetry | null): Se
     }
     return view
   })
+}
+
+export type RoomNodeView = Omit<RoomNodeStatus, 'sensors'> & { sensors: SensorView[] }
+
+export function roomNodeViews(
+  status: RoomStatus,
+  telemetryOf: (nodeId: string) => Telemetry | null = () => null,
+): RoomNodeView[] {
+  const nodes = status.nodes ?? (status.node ? [{ ...status.node, sensors: status.sensors }] : [])
+  return nodes.map((node) => ({
+    ...node,
+    sensors: sensorViews({ node, sensors: node.sensors }, telemetryOf(node.id)),
+  }))
 }

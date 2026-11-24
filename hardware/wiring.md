@@ -1,12 +1,11 @@
-# Sơ đồ nối dây hai node — phần P1
+# Sơ đồ nối dây cho node ESP8266
 
-Cập nhật: **26/10/2026**. Mỗi node dùng một ESP8266 NodeMCU và cùng sơ đồ dưới đây; đặt `DEVICE_ID` riêng khi cấu hình firmware.
+Mỗi node dùng một ESP8266 NodeMCU và cùng sơ đồ dưới đây. Đặt `DEVICE_ID` riêng khi cấu hình firmware.
 
 ## Trạng thái bàn giao
 
-- Thiết kế hiện tại đi cùng firmware **V6**, marker `NODE_FULL_V6_FLAME_POWER`.
-- V5 đã từng chạy và gửi dữ liệu ở một node. **V6 chưa được nạp vào ESP; chưa xác nhận nhánh nguồn Flame D1 đã lắp.** Người phụ trách đã xác nhận có dư điện trở 4,7 kΩ và 47 kΩ cho nhánh này.
-- Chưa có bằng chứng hoàn thành và kiểm thử hai node độc lập. Người tiếp nhận cần ghi kết quả từng node, không coi bản thiết kế là kết quả thử mạch thật.
+- Firmware trong repo in marker `NODE_FULL_V7_BACKEND_COMPATIBLE` trên Serial khi khởi động.
+- Kiểm tra nhánh giám sát nguồn Flame ở D1 trên từng bo. Ghi mã node, phiên bản thực tế và kết quả theo [kịch bản phần cứng](../tests/hardware-test-cases.md).
 
 ## Bảng chân cho mỗi node
 
@@ -20,14 +19,14 @@ Cập nhật: **26/10/2026**. Mỗi node dùng một ESP8266 NodeMCU và cùng s
 | MQ-2 VCC | Nguồn 5 V phù hợp đúng module | Hiện người dùng lấy từ VV; **chưa đo xác nhận điện áp và khả năng cấp tải**. Không cấp bộ nung từ 3V3 |
 | MQ-2 GND | GND chung | |
 | MQ-2 AO | Qua bộ chia 47 kΩ/10 kΩ vào A0 | Sơ đồ bên dưới; không nối thẳng AO vào A0 |
-| MQ-2 DO | Để trống | Đã bỏ khỏi D1; V6 dùng AO |
+| MQ-2 DO | Để trống | Firmware đọc AO trên A0 |
 | Flame VCC | Đang nối ESP 3V3 | Đây là cách nối được người dùng xác nhận; chưa biết đúng mã module. Thông tin nơi bán trước đó ghi 5 V, cần xác minh nguồn yêu cầu |
 | Flame GND | GND chung | |
 | Flame DO | Giao tiếp mức điện áp phù hợp → D0 / GPIO16 | Phải xác nhận điện áp HIGH và mạch giao tiếp theo module thực tế |
 | Flame AO | Để trống | A0 đã dành cho MQ-2 |
 | Điểm VCC phía Flame | Qua 4,7 kΩ/47 kΩ → D1 / GPIO5 | Nhánh giám sát **chỉ áp dụng VCC 3V3** |
-| Còi VCC / GND | 3V3 / GND chung | Module ba chân VCC, I/O, GND; thông tin nơi mua 3,3–5 V, kích PWM |
-| Còi I/O | D5 / GPIO14 | Firmware nghỉ HIGH; kêu bằng PWM 2 kHz, khoảng 50% |
+| Còi VCC / GND | 3V3 / GND chung | Module ba chân VCC, I/O, GND. Xác nhận module tương thích với nguồn và mức kích đang dùng. |
+| Còi I/O | D5 / GPIO14 | Firmware bật còi bằng mức LOW. Khi tắt, D5 dùng `BUZZER_IDLE_LEVEL`, mẫu mặc định HIGH. |
 | RGB chân âm chung | GND chung | Loại common cathode; xác định chân theo đúng LED |
 | RGB đỏ R | D6 / GPIO12 qua 330 Ω riêng | |
 | RGB xanh lá G | D7 / GPIO13 qua 330 Ω riêng | |
@@ -65,16 +64,16 @@ Nhánh D1 cho mức danh định khoảng 3,0 V khi VCC Flame là 3,3 V. **Khôn
 
 Điểm lấy tín hiệu phải ở phía module, sau dây cấp nguồn muốn theo dõi. D1 chỉ thấy điện tại điểm đó: nếu tháo module ở phía sau mà điểm đo vẫn có 3V3, phần mềm vẫn thấy nguồn. Nhánh này không đo chính xác điện áp và không chẩn đoán mọi lỗi GND, DO, đầu thu quang hoặc module hỏng.
 
-## Phần còn phải xác minh trước khi cấp điện/nạp V6
+## Kiểm tra trước khi cấp điện và nạp firmware
 
 1. Xác nhận model Flame và điện áp hoạt động thực tế. Không tự đổi VCC từ 3V3 sang 5 V khi vẫn giữ nhánh D1 trên.
 2. Xác nhận giao tiếp Flame DO → D0. Bộ chia từng chọn cho HIGH 5 V có thể làm HIGH 3V3 quá thấp; không tự đấu tắt khi chưa biết điện áp đầu ra.
 3. Kiểm tra nguồn MQ-2 và dây nguồn. Mạch từng có cảnh báo USB quá dòng; nếu tái diễn, rút nguồn và xử lý trước khi thử tiếp. LED nguồn sáng không xác nhận điện áp đủ hoặc nguồn ổn định.
-4. Xác nhận D1 đã trống dây MQ-2 DO cũ và có nhánh giám sát đúng. Sau đó mới nạp V6 và thử từng node theo kịch bản kiểm thử.
+4. Xác nhận D1 đã trống dây MQ-2 DO cũ và có nhánh giám sát đúng. Sau đó nạp firmware và thử từng node theo kịch bản kiểm thử.
 
 Trên breadboard, A–E cùng số hàng nối điện với nhau; F–J là nhóm riêng phía bên kia rãnh. Hai chân mỗi điện trở phải ở hai nhóm điện khác nhau. Thanh nguồn có thể đứt đoạn giữa; cần kiểm tra theo breadboard thực tế.
 
-## Quy ước trạng thái dự kiến của V6
+## Tín hiệu LED và còi
 
 | Trạng thái | LED/còi |
 |---|---|

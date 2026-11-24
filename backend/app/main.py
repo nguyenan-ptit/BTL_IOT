@@ -35,6 +35,7 @@ app.add_middleware(
     "Authorization",
     "X-CSRF-Token",
     "X-IoT-Request",
+    "X-IoT-Firmware-Manifest",
 ],
 )
 

@@ -1,6 +1,6 @@
-# Trạng thái sửa theo checklist của Long — cập nhật 07/11/2026
+# Trạng thái triển khai và kiểm thử backend
 
-Tài liệu phân biệt phần đã có trong code, đã kiểm thử và còn cần tích hợp theo CHECKLIST_CONG_VIEC_LONG.md. Backend đã dùng MySQL và có quan sát telemetry thật trên DB test local; chưa có deployment production và chưa hoàn tất toàn bộ checklist. Hướng dẫn máy nhận: [RUN_BACKEND_WINDOWS](RUN_BACKEND_WINDOWS.md); bản ngắn gửi nhóm: [HANDOVER_SUMMARY](HANDOVER_SUMMARY.md).
+Các bảng và kết quả kiểm thử ghi lại mốc 07/11/2026. Ở mốc này, backend đã dùng MySQL và nhận telemetry thật trên DB thử cục bộ. Để chạy bản hiện tại, xem [hướng dẫn Windows](RUN_BACKEND_WINDOWS.md) và [tóm tắt bàn giao](HANDOVER_SUMMARY.md).
 
 ## Đối chiếu phạm vi
 
@@ -48,9 +48,9 @@ Instance MySQL test riêng dùng cổng 13317 và datadir dưới test-output, d
 ## Việc cần cung cấp để chạy hệ thống nhóm
 
 1. Điền kết nối MySQL trong .env bằng IOT_MYSQL_* và MQTT thật trong backend/settings.local.json hoặc IOT_MQTT_*; giữ mật khẩu ngoài Git. Sao lưu DB, dừng backend, chạy migrate.py --check rồi --apply.
-2. Người 3 cung cấp dịch vụ đăng nhập/token và JWT_SECRET dùng chung. Token cần user_id, role admin/owner/tenant và exp; user trong DB phải active. Dữ liệu mẫu locked/hash giả không dùng để đăng nhập thật.
+2. Đặt `JWT_SECRET` riêng và chuẩn bị tài khoản hoạt động theo [hướng dẫn JWT và tài khoản](RUN_BACKEND_WINDOWS.md#5-jwt-và-tài-khoản). Frontend dùng `POST /api/auth/login` để lấy token.
 3. Xác định deployment EMQX và URL quản trị; cấu hình khóa API ở local/env. Đối chiếu policy và các username cũ trước khi bật policy_verified. Không gửi khóa vào chat hoặc đưa vào firmware/frontend.
 4. Chạy capabilities và nghiệm thu node thử trên deployment: tạo tài khoản, topic ACL, thu hồi/ngắt phiên, thử kết nối lại bằng thông tin cũ, lỗi và retry. Nếu Serverless thiếu API cần thiết, chức năng tự động giữ trạng thái chưa hoàn tất; nhóm cần chọn cách xử lý theo [LONG_API](LONG_API.md).
-5. Người 1 nạp username/password mới cho ESP, kiểm tra xong mới kích hoạt. Người 4 tích hợp API và hiển thị processing/succeeded/incomplete; frontend mock hiện có chưa được tự chuyển hợp đồng.
+5. Kiểm tra thông tin MQTT riêng của ESP trước khi kích hoạt. Thử từ [giao diện React](../frontend/README.md) và đối chiếu trạng thái thao tác với phản hồi API.
 
 Chi tiết endpoint, mã lỗi, trạng thái và cấu hình EMQX: [LONG_API](LONG_API.md). Hướng dẫn vận hành: [backend/README](../backend/README.md), [database/README](../database/README.md).

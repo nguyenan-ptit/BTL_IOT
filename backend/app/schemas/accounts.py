@@ -64,3 +64,9 @@ class CreateTenantRequest(BaseModel):
     @classmethod
     def normalize_username(cls, value: str) -> str:
         return value.strip().lower()
+
+
+class TenantAssignmentUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    room_id: str | None = Field(min_length=1, max_length=20)

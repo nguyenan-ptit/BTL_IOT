@@ -38,12 +38,15 @@ async def upload_firmware(request: Request, device_id: str = Query(pattern=DEVIC
     check_control_request(request, content_type="application/octet-stream")
     ota = request.app.state.ota
     ota.ensure_enabled()
+    manifest_headers = request.headers.getlist("X-IoT-Firmware-Manifest")
+    if len(manifest_headers) != 1:
+        raise HTTPException(422, "Cần đúng một manifest đã ký đi kèm firmware.")
     image = bytearray()
     async for chunk in request.stream():
         if len(image) + len(chunk) > MAX_IMAGE_BYTES:
             raise HTTPException(413, "File firmware vượt quá 1 MiB.")
         image.extend(chunk)
-    return await run_in_threadpool(ota.add_release, device_id, version, bytes(image), user)
+    return await run_in_threadpool(ota.add_release, device_id, version, bytes(image), manifest_headers[0], user)
 
 
 @router.get("/firmware")

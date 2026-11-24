@@ -42,7 +42,7 @@ Firmware sẽ:
 
 Cấu hình cũ không có `MQTT_USE_TLS`, hoặc đặt giá trị `0`, tiếp tục dùng LAN IPv4/TCP và discovery LAN như trước. Đổi chế độ cần biên dịch và nạp lại từng bo.
 
-## 3. Kết nối phía Long
+## 3. Kết nối MQTT phía backend
 
 Backend dùng cùng hostname, cổng TLS và CA của broker, với tài khoản MQTT phù hợp. Đăng ký `iot/devices/+/telemetry`; cấu hình quyền publish/subscribe theo vai trò và các topic trong hợp đồng. Mỗi MQTT client phải có client ID riêng để tránh ngắt kết nối lẫn nhau.
 

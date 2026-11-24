@@ -18,6 +18,7 @@ from app.models.user_scope import UserScope
 from app.schemas.accounts import (
     CreateLandlordRequest,
     CreateTenantRequest,
+    TenantAssignmentUpdateRequest,
     UserCreateRequest,
     UserUpdateRequest,
 )
@@ -32,6 +33,27 @@ def _forbidden():
 
 def _now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _active_assignments(db: Session, now: datetime):
+    return db.query(UserScope).filter(
+        UserScope.started_at <= now,
+        (UserScope.ended_at.is_(None)) | (UserScope.ended_at > now),
+    )
+
+
+def _owned_rooms(db: Session, owner_id: int):
+    return db.query(Room).join(BoardingHouse, BoardingHouse.id == Room.boarding_house_id).filter(
+        BoardingHouse.landlord_id == owner_id,
+    )
+
+
+def _owned_tenant_assignments(db: Session, owner_id: int):
+    return _active_assignments(db, _now()).join(User, User.id == UserScope.user_id).join(
+        Room, Room.id == UserScope.room_id,
+    ).join(BoardingHouse, BoardingHouse.id == Room.boarding_house_id).filter(
+        User._role == "tenant", BoardingHouse.landlord_id == owner_id,
+    )
 
 
 def _require_admin(user: User, db: Session):
@@ -81,11 +103,9 @@ def _replace_scope(db: Session, user: User, role: str, scope: dict, actor: User)
         house.landlord_id = user.id
 
     now = _now()
-    current_links = db.query(UserScope).filter(
+    current_links = _active_assignments(db, now).filter(
         UserScope.user_id == user.id,
-        UserScope.started_at <= now,
-        (UserScope.ended_at.is_(None)) | (UserScope.ended_at > now),
-    ).all()
+    ).with_for_update().all()
     for link in current_links:
         if link.room_id not in room_ids:
             link.ended_at = now
@@ -161,7 +181,7 @@ def update_user(
         numeric_id = int(user_id)
     except ValueError:
         numeric_id = -1
-    user = db.query(User).filter(User.id == numeric_id).first()
+    user = db.query(User).filter(User.id == numeric_id).with_for_update().first()
     if user is None:
         raise HTTPException(404, {"code": "NOT_FOUND", "message": "Không tìm thấy tài khoản."})
     _validate_scope(db, payload.role, payload.scope.model_dump())
@@ -255,6 +275,83 @@ def create_landlord(payload: CreateLandlordRequest, current_user: User = Depends
         raise
 
 
+@router.get("/accounts/tenants")
+def list_tenant_assignments(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "landlord":
+        raise _forbidden()
+    rows = _owned_tenant_assignments(db, current_user.id).with_entities(
+        func.min(UserScope.id).label("assignment_id"), User.username, User.display_name,
+        Room.id.label("room_id"), Room.name.label("room_name"), BoardingHouse.name.label("house_name"),
+    ).group_by(
+        User.id, User.username, User.display_name, Room.id, Room.name, BoardingHouse.id, BoardingHouse.name,
+    ).order_by(BoardingHouse.name, Room.name, User.username, Room.id).all()
+    return {"items": [dict(row._mapping) for row in rows]}
+
+
+@router.patch("/accounts/tenants/assignments/{assignment_id}")
+def update_tenant_assignment(
+    assignment_id: int,
+    payload: TenantAssignmentUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "landlord":
+        raise _forbidden()
+    missing = HTTPException(404, {
+        "code": "ASSIGNMENT_NOT_FOUND", "message": "Không tìm thấy lượt thuê đang có hiệu lực.",
+    })
+    # Scope the lookup before taking locks. Recheck ownership and the assignment under lock.
+    assignment = _owned_tenant_assignments(db, current_user.id).filter(
+        UserScope.id == assignment_id,
+    ).with_entities(UserScope.user_id, UserScope.room_id).first()
+    if assignment is None:
+        raise missing
+    tenant_id, source = assignment
+    destination = payload.room_id
+    if db.query(User.id).filter(User.id == tenant_id, User._role == "tenant").with_for_update().first() is None:
+        raise missing
+
+    room_ids = [source] if destination is None else [source, destination]
+    owned = {room.id for room in _owned_rooms(db, current_user.id).filter(
+        Room.id.in_(room_ids),
+    ).with_entities(Room.id).order_by(Room.id).with_for_update()}
+    if source not in owned:
+        raise missing
+    if destination is not None and destination not in owned:
+        raise _forbidden()
+    if destination == source:
+        raise HTTPException(422, {"code": "SAME_ROOM", "message": "Hãy chọn phòng khác."})
+
+    # MySQL stores room_users timestamps to the second. End the old access and
+    # start the new access at the same database-representable instant.
+    now = _now().replace(microsecond=0)
+    links = _active_assignments(db, now).filter(
+        UserScope.user_id == tenant_id, UserScope.room_id.in_(room_ids),
+    ).with_for_update().all()
+    if not any(link.id == assignment_id for link in links):
+        raise missing
+    for link in links:
+        if link.room_id == source:
+            link.ended_at = now
+    if destination is not None and not any(link.room_id == destination for link in links):
+        db.add(UserScope(user_id=tenant_id, room_id=destination, started_at=now))
+
+    try:
+        write_audit(
+            db, actor_id=current_user.id, target_type="user", target_id=tenant_id, room_id=source,
+            action="user_updated",
+            summary=f"Kết thúc thuê phòng {source}" if destination is None else f"Chuyển phòng {source} sang {destination}",
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"message": "Đã kết thúc thuê." if destination is None else "Đã chuyển phòng."}
+
+
 @router.post("/accounts/tenants", status_code=status.HTTP_201_CREATED)
 def create_tenant(payload: CreateTenantRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if current_user.role != "landlord":
@@ -276,7 +373,7 @@ def create_tenant(payload: CreateTenantRequest, current_user: User = Depends(get
     try:
         db.add(tenant)
         db.flush()
-        db.add(UserScope(user_id=tenant.id, room_id=room.id, started_at=_now()))
+        db.add(UserScope(user_id=tenant.id, room_id=room.id, started_at=_now().replace(microsecond=0)))
         write_audit(db, actor_id=current_user.id, action="user_created", target_type="user",
                     target_id=tenant.id, summary=f"Tạo tài khoản tenant {username} cho phòng {room.name}", room_id=room.id)
         db.commit()

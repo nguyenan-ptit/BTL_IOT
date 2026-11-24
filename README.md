@@ -1,8 +1,8 @@
 # BTL_IOT — dự án giám sát và cảnh báo cháy/gas
 
-Repository nhóm gồm firmware ESP8266 cho hai node, backend FastAPI dùng MySQL và frontend React. Backend đã nhận telemetry thật qua EMQX Cloud và lưu MySQL trong buổi kiểm thử local. Frontend vẫn mặc định dùng dữ liệu mô phỏng; đăng nhập thật, quản trị tài khoản MQTT tự động và triển khai chung chưa hoàn tất tích hợp.
+Repository nhóm gồm firmware ESP8266 cho hai node, backend FastAPI dùng MySQL và frontend React. Backend đã nhận telemetry thật qua EMQX Cloud và lưu MySQL trong buổi kiểm thử local. Frontend dùng API FastAPI để đăng nhập, xem dữ liệu và quản lý thiết bị. Xem [hướng dẫn FOTA](docs/OTA_CONTRACT.md) để tạo, ký và tải lên bản firmware cho từng node.
 
-Phần **Nguyễn Văn An** gồm phần cứng/firmware ESP8266, cảm biến, LED, còi và hợp đồng MQTT. **Hà Hải Long** phụ trách MQTT, MySQL, API dữ liệu/điều khiển và vòng đời node. **Đăng Kỳ Vĩ** phụ trách dịch vụ tài khoản/xác thực, phối hợp sự cố và thông báo. **Vũ Thành Nguyên** tích hợp giao diện với API. Xem [bàn giao hiện tại](docs/HANDOVER.md) và [phần đã kiểm thử/còn thiếu](docs/LONG_IMPLEMENTATION_STATUS.md).
+**Nguyễn Văn An** phụ trách phần cứng, firmware ESP8266, cập nhật firmware qua mạng (FOTA), kết nối MQTT trên node và kiểm thử đầu ra. **Đặng Kỳ Vĩ** phụ trách backend, đăng nhập, xác thực và phân quyền. **Vũ Thành Nguyên** phụ trách frontend React, tích hợp API và cơ sở dữ liệu. Xem [bàn giao hiện tại](docs/HANDOVER.md) và [trạng thái kiểm thử backend](docs/LONG_IMPLEMENTATION_STATUS.md).
 
 ## Nội dung và điểm bàn giao
 
@@ -16,7 +16,7 @@ Phần **Nguyễn Văn An** gồm phần cứng/firmware ESP8266, cảm biến, 
 | `tests/` | Kiểm tra native C++, hướng dẫn biên dịch và kịch bản kiểm tra phần cứng |
 | `backend/` | FastAPI/Paho, validation, MySQL, JWT adapter, API quản lý/điều khiển và dashboard thử API |
 | `database/` | Schema MySQL chuẩn, migration, dữ liệu demo/test tùy chọn |
-| `frontend/` | Website giám sát; mặc định dùng dữ liệu giả lập |
+| `frontend/` | Website React gọi API FastAPI để giám sát và quản lý thiết bị |
 
 ```text
 DS18B20 / MQ-2 / Flame → ESP8266 → đèn/còi tại chỗ
@@ -57,11 +57,10 @@ Wi-Fi đã lưu được dùng lại sau mất điện và được ưu tiên h�
 Làm theo [hướng dẫn backend từ đầu](backend/README.md): tạo môi trường Python, cấu hình MQTT/MySQL, khởi tạo DB hoặc migration, đặt JWT_SECRET rồi mới chạy server. Các lệnh sau dùng **CMD trên Windows**, chạy từ gốc repository sau khi hoàn thành cấu hình:
 
 ```bat
-set "JWT_SECRET=<khoa-dung-chung-voi-dich-vu-tai-khoan-it-nhat-32-ky-tu>"
 .venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Thay placeholder JWT_SECRET bằng khóa riêng thực tế; file `.env` không được tự nạp. Mỗi DB chỉ chạy một backend/worker. `/api/health` công khai; `/api/devices`, lịch sử và thao tác quản lý cần Bearer JWT của user active trong SQL. Swagger ở http://127.0.0.1:8000/docs; `/` là trang thử API.
+Backend đọc `.env` ở gốc repo. Đặt `JWT_SECRET` riêng, dài ít nhất 32 ký tự. Mỗi DB chỉ chạy một backend/worker. `/api/health` công khai. `/api/devices`, lịch sử và thao tác quản lý cần Bearer JWT của tài khoản đang hoạt động trong MySQL. Swagger ở http://127.0.0.1:8000/docs. Đường dẫn `/` mở trang thử API.
 
 Với EMQX Serverless, điền `mqtt_tls: true`, cổng `8883`, topic `iot/devices/+/telemetry`, file CA hợp lệ và `discovery_enabled: false`. Kết nối MQTT nhận dữ liệu hoạt động riêng với API quản trị broker. Cấu hình hiện tại chưa hỗ trợ tự động cấp/xóa tài khoản MQTT trên Serverless; xem [giới hạn và mã lỗi](docs/LONG_API.md). Test khóa/mở và bảo trì tại BE theo [BE_LIFECYCLE_TEST](docs/BE_LIFECYCLE_TEST.md).
 
@@ -79,7 +78,7 @@ Firmware đọc `config.h`, không tự đọc `.env`. `config.h` là cấu hìn
 
 Giữ phân vùng LittleFS khi dùng Upload sketch thông thường để không xóa ngưỡng đã lưu. Các ngưỡng trong `config.h` là mặc định khi chưa có bản lưu hợp lệ; ngưỡng thực tế cần đọc từ telemetry.
 
-## Giao tiếp với phần Long
+## Giao tiếp MQTT giữa firmware và backend
 
 | Topic | Chiều | QoS |
 | --- | --- | --- |
@@ -116,11 +115,10 @@ Còi nghỉ HIGH, nguồn MQ tại VV và Flame 3V3 cần đối chiếu module/
 
 | Thành viên tiếp nhận | Cần đọc / cần thống nhất |
 | --- | --- |
-| Backend (Long) | MySQL/API đã có; hoàn tất cấu hình quản trị EMQX, tích hợp xác thực/frontend, deployment và nghiệm thu lệnh/ACK |
-| Tài khoản (Vĩ) | API đăng ký/đăng nhập, băm mật khẩu, JWT; thống nhất users/role/status và phạm vi phòng với Long |
-| Frontend (Nguyên) | Đối chiếu LONG_API với hợp đồng mock, tích hợp token và các response thực tế; tắt mock sau khi đã nối API |
+| Backend và tài khoản (Vĩ) | FastAPI, đăng nhập, quản lý tài khoản, JWT và phân quyền |
+| Frontend và cơ sở dữ liệu (Nguyên) | React, tích hợp API và luồng đăng nhập, MySQL |
 | Triển khai / bot | Thống nhất dịch vụ, broker và HTTPS; thông báo chống gửi lặp là phần cần tích hợp riêng |
-| P1 | Hoàn thiện dây và nghiệm thu từng node; bổ sung ảnh thật, kết quả và log đã loại thông tin cá nhân |
+| Phần cứng, firmware và FOTA (An) | Đấu dây, cấu hình MQTT trên node, cập nhật firmware qua mạng và nghiệm thu từng node |
 
 Mỗi người commit bằng tài khoản GitHub của mình, mô tả đúng thay đổi thật. Không tạo lịch sử commit giả. Nhóm tạo tag/release cuối sau khi tích hợp và nghiệm thu; bản bàn giao chưa phải xác nhận đạt v1.0.0.
 
@@ -128,13 +126,12 @@ Không commit `.env` thật, token bot, mật khẩu broker, log chứa dữ li�
 
 ## Chạy frontend
 
-Xem [frontend/README.md](frontend/README.md). Tóm tắt:
+Khởi động backend theo [hướng dẫn backend](backend/README.md) và chuẩn bị một [tài khoản đăng nhập cho môi trường thử](docs/RUN_BACKEND_WINDOWS.md#5-jwt-và-tài-khoản). Chạy các lệnh sau từ thư mục gốc trong PowerShell.
 
 ```powershell
 cd frontend
-npm install
-copy .env.example .env.local
-npm run dev
+npm ci
+Copy-Item .env.example .env.local
 ```
 
-Mở http://localhost:5173. Mặc định chạy với dữ liệu giả lập (ghi rõ là mô phỏng), không cần backend.
+Trong `frontend/.env.local`, đặt `VITE_API_BASE_URL` thành địa chỉ backend. Giá trị trong file mẫu là `http://127.0.0.1:8000`. Chạy `npm run dev` trong thư mục `frontend`, mở http://localhost:5173 và đăng nhập. Xem thêm [hướng dẫn frontend](frontend/README.md).

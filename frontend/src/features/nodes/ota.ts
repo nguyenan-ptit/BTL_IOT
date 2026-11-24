@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
+import { ApiError } from '@/shared/api/errors'
 import { CONTROL_HEADERS, request } from '@/shared/api/http'
 
 const releaseSchema = z.object({
@@ -68,11 +69,23 @@ export function useFirmwareReleases(deviceId: string, enabled: boolean) {
   })
 }
 
-export function uploadFirmware(deviceId: string, version: string, file: File) {
+export async function uploadFirmware(
+  deviceId: string,
+  version: string,
+  file: File,
+  manifest: File,
+) {
+  const signedManifest = (await manifest.text()).trim()
+  if (!/^[A-Za-z0-9._:-]{1,1024}$/.test(signedManifest)) {
+    throw new ApiError(422, {
+      code: 'VALIDATION_ERROR',
+      message: 'Định dạng manifest firmware không hợp lệ.',
+    })
+  }
   return request('/api/firmware', releaseSchema, {
     method: 'POST',
     body: file,
-    headers: CONTROL_HEADERS,
+    headers: { ...CONTROL_HEADERS, 'X-IoT-Firmware-Manifest': signedManifest },
     query: { device_id: deviceId, version },
   })
 }

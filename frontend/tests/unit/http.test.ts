@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { uploadFirmware } from '@/features/nodes/ota'
 import { ApiError } from '@/shared/api/errors'
 import { CONTROL_HEADERS, onUnauthorized, request } from '@/shared/api/http'
 import { clearToken, getToken, setToken } from '@/shared/api/token'
@@ -79,17 +80,24 @@ describe('request() với Bearer token', () => {
     expect(headers.get('Content-Type')).toBe('application/json')
   })
 
-  it('gửi nguyên bytes khi upload file firmware', async () => {
+  it('gửi nguyên bytes và manifest khi upload firmware', async () => {
     const file = new File([new Uint8Array([0xe9, 0x00, 0xff])], 'node.bin')
-    fetchMock.mockResolvedValue(jsonResponse(201, {}))
-    await request('/api/firmware', z.object({}), {
-      method: 'POST',
-      query: { device_id: 'node10', version: 'v1.0.1' },
-      headers: CONTROL_HEADERS,
-      body: file,
-    })
+    const value = `node10:v1.0.1:${'a'.repeat(64)}:${'b'.repeat(512)}`
+    const manifest = new File([`${value}\n`], 'node.manifest')
+    fetchMock.mockResolvedValue(
+      jsonResponse(201, {
+        firmware_id: 'release',
+        device_id: 'node10',
+        version: 'v1.0.1',
+        size_bytes: 3,
+        created_at: '',
+      }),
+    )
+    await uploadFirmware('node10', 'v1.0.1', file, manifest)
     expect(fetchMock.mock.calls.at(-1)![0]).toBe('/api/firmware?device_id=node10&version=v1.0.1')
     expect(lastInit().body).toBe(file)
-    expect(new Headers(lastInit().headers).get('Content-Type')).toBe('application/octet-stream')
+    const headers = new Headers(lastInit().headers)
+    expect(headers.get('Content-Type')).toBe('application/octet-stream')
+    expect(headers.get('X-IoT-Firmware-Manifest')).toBe(value)
   })
 })

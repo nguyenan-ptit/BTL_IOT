@@ -2,7 +2,7 @@
 
 Backend nhận telemetry từ ESP, lưu MySQL và cung cấp API có xác thực để quản lý thiết bị, đọc dữ liệu và điều khiển. Xem [hợp đồng API và EMQX](../docs/LONG_API.md), [nâng cấp database](../database/README.md) và [kết quả kiểm thử](../docs/LONG_IMPLEMENTATION_STATUS.md).
 
-Người nhận chạy trên Windows CMD nên bắt đầu ở [RUN_BACKEND_WINDOWS](../docs/RUN_BACKEND_WINDOWS.md): cài môi trường, tạo DB/user, cấu hình MQTT TLS, đặt JWT_SECRET, tạo token test và xử lý lỗi thường gặp. [HANDOVER](../docs/HANDOVER.md) phân chia phần Long/Vĩ/Nguyên và việc còn thiếu; [bản tóm tắt gửi nhóm](../docs/HANDOVER_SUMMARY.md) có thể copy trực tiếp.
+Người nhận chạy trên Windows CMD nên xem [hướng dẫn cài đặt](../docs/RUN_BACKEND_WINDOWS.md) để tạo database và tài khoản thử, cấu hình MQTT TLS và đặt JWT_SECRET. Xem [phân công và các mục nghiệm thu](../docs/HANDOVER.md) hoặc [bản tóm tắt](../docs/HANDOVER_SUMMARY.md).
 
 ## Chuẩn bị và chạy
 
@@ -15,9 +15,9 @@ Copy-Item backend/settings.example.json backend/settings.local.json
 Copy-Item .env.example .env
 ~~~
 
-Điền MySQL và JWT trong `.env`; cấu hình MQTT/EMQX trong settings.local.json hoặc biến môi trường. Không commit file local, mật khẩu, CA riêng hoặc khóa.
+Điền MySQL và JWT trong `.env`. Cấu hình MQTT/EMQX trong `settings.local.json` hoặc qua các biến môi trường được hỗ trợ.
 
-JWT_SECRET phải trùng với dịch vụ tài khoản của người 3, ít nhất 32 ký tự. Token phải có user_id kiểu số nguyên, role và exp. Mỗi request được kiểm tra lại tài khoản đang active và role hiện tại trong MySQL; token của tài khoản locked bị từ chối. Không có khóa JWT mặc định và backend này không tự xây lại luồng đăng nhập.
+Đặt `JWT_SECRET` riêng, dài ít nhất 32 ký tự. `POST /api/auth/login` kiểm tra tài khoản trong MySQL và cấp Bearer JWT. Với API được bảo vệ, backend kiểm tra trạng thái và quyền hiện tại của tài khoản trong MySQL.
 
 Tạo database mới hoặc chạy migration theo [database/README](../database/README.md), sau đó:
 
@@ -27,7 +27,7 @@ Tạo database mới hoặc chạy migration theo [database/README](../database/
 
 Mỗi database chỉ cho phép một backend; khóa MySQL ngăn worker thứ hai và migration chạy khi backend còn hoạt động. Worker giữ khóa sống trong suốt phiên. Nếu mất kết nối giữ khóa, backend dừng nhận MQTT và từ chối điều khiển cho đến khi khởi động lại. Khi triển khai ra mạng cần reverse proxy HTTPS.
 
-Dashboard thử tại http://127.0.0.1:8000/ hoặc /dashboard nhận mã truy cập từ dịch vụ tài khoản. Mã chỉ giữ trong bộ nhớ trang, bị xóa khi đóng phiên/tải lại. Đây là màn thử API, không thay thế giao diện đăng nhập của người 4. OpenAPI ở /docs.
+Dashboard thử tại http://127.0.0.1:8000/ hoặc `/dashboard` dùng Bearer JWT và giữ token trong bộ nhớ trang. Swagger ở `/docs`. Để đăng nhập trên giao diện React, xem [hướng dẫn frontend](../frontend/README.md).
 
 ## Cấu hình
 
@@ -35,7 +35,7 @@ Dashboard thử tại http://127.0.0.1:8000/ hoặc /dashboard nhận mã truy c
 - MQTT TLS: mqtt_tls=true và mqtt_ca_certs trỏ tới CA tin cậy. Không bỏ qua kiểm tra chứng chỉ.
 - MySQL: một nguồn duy nhất là `IOT_MYSQL_*` trong `.env` (hoặc biến môi trường tiến trình); cả SQLAlchemy và PyMySQL dùng cùng giá trị. `IOT_MYSQL_SSL_CA` tùy chọn.
 - EMQX quản trị: cấu hình không bí mật có thể ở khối emqx_admin; API URL/key/secret, deployment và policy verification nhận IOT_EMQX_* từ `.env` hoặc môi trường tiến trình. Key/secret tách biệt với tài khoản MQTT của backend và node. Chi tiết và giới hạn Serverless ở [LONG_API](../docs/LONG_API.md).
-- settings.local.json và .env không được commit. Mẫu để trống mọi bí mật; thiếu mật khẩu MySQL hoặc JWT_SECRET thì backend không khởi động.
+- Giữ `settings.local.json` và `.env` ngoài Git. Thay giá trị mẫu bằng mật khẩu MySQL và khóa JWT riêng trước khi khởi động.
 
 ## Hành vi dữ liệu và điều khiển
 
@@ -62,8 +62,8 @@ Bộ mặc định chạy API thật trong tiến trình với adapter SQLite v�
 
 [mysql_integration.py](../tests/backend/mysql_integration.py) chạy lại API và migration trên MySQL tạm riêng ở 127.0.0.1:13317. Script kiểm tra datadir trước mọi thao tác tạo DB và không chạm dịch vụ MySQL đang dùng. Cách chạy và bằng chứng ở [trạng thái triển khai](../docs/LONG_IMPLEMENTATION_STATUS.md).
 
-scripts/test_devices.py là smoke test có thay đổi dữ liệu, chỉ chạy trên DB thử. Cấp ba token từ luồng đăng nhập thật qua IOT_TEST_ADMIN_TOKEN, IOT_TEST_OWNER_TOKEN, IOT_TEST_TENANT_TOKEN. Script không tự ký token và không đọc JWT_SECRET. Dữ liệu mẫu dùng ID 1001/1002/1003 nhưng tài khoản mặc định locked, hash giả; cần người 3 chuẩn bị tài khoản đăng nhập thật trước.
+`scripts/test_devices.py` là smoke test có thay đổi dữ liệu, chỉ chạy trên DB thử. Lấy ba token từ API đăng nhập và truyền qua `IOT_TEST_ADMIN_TOKEN`, `IOT_TEST_OWNER_TOKEN` và `IOT_TEST_TENANT_TOKEN`. Dữ liệu mẫu dùng ID 1001/1002/1003. Đặt mật khẩu và kích hoạt từng tài khoản thử trước khi đăng nhập.
 
 ## Phối hợp còn cần
 
-Người 3 cung cấp đăng nhập/cấp token và quản lý tài khoản; người 4 tích hợp các API trong LONG_API. Frontend React hiện vẫn có hợp đồng /api/nodes, /api/auth/* và mock riêng, chưa tự chuyển thành khách hàng của các API thiết bị này. Người 1 cập nhật username/password mới lên ESP trước khi kích hoạt, và nghiệm thu ngưỡng, còi/LED thực tế.
+Cấu hình tài khoản MQTT riêng cho từng ESP trước khi kích hoạt node. Kiểm tra quyền theo vai trò và phòng bằng tài khoản thử, rồi nghiệm thu ngưỡng, còi và LED trên từng bo.

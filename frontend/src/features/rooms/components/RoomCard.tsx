@@ -1,14 +1,4 @@
-import {
-  Flame,
-  Hourglass,
-  Info,
-  Lock,
-  Thermometer,
-  TriangleAlert,
-  WifiOff,
-  Wind,
-  Wrench,
-} from 'lucide-react'
+﻿import { Flame, Hourglass, Thermometer, TriangleAlert, Wind } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { formatClock } from '@/shared/lib/datetime'
 import { hazardSignLabel, roomNumber } from '@/shared/lib/labels'
@@ -18,7 +8,7 @@ import { cn } from '@/shared/ui/cn'
 import { roomStatusStyle } from '@/shared/ui/status'
 import { StatusPill } from '@/shared/ui/StatusPill'
 import type { RoomStatus } from '../schemas'
-import { GAS_MIN_VALID, isFault, type SensorView } from '../sensors'
+import { GAS_MIN_VALID, isFault, type RoomNodeView, type SensorView } from '../sensors'
 
 const sensorMeta = {
   gas: { label: 'Gas/khói', icon: Wind },
@@ -94,100 +84,85 @@ function sensorNote(sensor: SensorView): string | null {
   return null
 }
 
-/** Chân thẻ: bên trái là node, bên phải là lúc nhận số đo gần nhất. */
-function footer(
-  status: RoomStatus,
-  offline: boolean,
-  now: Date,
-  blockedNodeId: string | null,
-): { node: string; when: string } {
-  const node = status.node
-  if (!node && blockedNodeId) return { node: blockedNodeId, when: 'Tạm khoá' }
-  if (!node) return { node: 'Chưa gắn node', when: '' }
-  if (node.lifecycle === 'registered') return { node: node.code, when: 'Chưa kích hoạt' }
-  if (!node.lastSeenAt) return { node: node.code, when: 'Chưa gửi dữ liệu' }
-  const at = formatClock(node.lastSeenAt, now)
-  return { node: node.code, when: offline ? `Mất tín hiệu từ ${at}` : `Nhận lúc ${at}` }
+function nodeStatus(node: RoomNodeView): string {
+  if (node.lifecycle === 'blocked') return 'Tạm khoá'
+  if (node.lifecycle === 'maintenance') return 'Đang bảo trì'
+  if (node.lifecycle === 'registered') return 'Chưa kích hoạt'
+  if (node.lifecycle === 'retired') return 'Ngừng sử dụng'
+  if (node.connectivity === 'offline') return 'Mất kết nối'
+  return 'Đang kết nối'
 }
 
-type Line = { text: string; tone: string; icon: typeof Lock }
+function NodeReadings({ node, now }: { node: RoomNodeView; now: Date }) {
+  const stale = node.connectivity === 'offline' && node.lastSeenAt !== null
+  const notes = node.sensors.map(sensorNote).filter(Boolean)
+  const when = node.lastSeenAt ? formatClock(node.lastSeenAt, now) : null
 
-/** Điều quan trọng nhất cần nói thêm về phòng, theo thứ tự ưu tiên; `null` khi không có gì. */
-function statusLine(v: {
-  status: RoomStatus
-  overall: RoomOverall
-  stale: boolean
-  faultNotes: (string | null)[]
-  warmingNotes: (string | null)[]
-  hasNotice: boolean
-}): Line | null {
-  const { status, overall, stale } = v
-  if (overall === 'blocked') {
-    return {
-      text: 'Node bị quản trị viên tạm khoá, phòng chưa được giám sát',
-      tone: 'text-board-900',
-      icon: Lock,
-    }
-  }
-  if (!status.node) return { text: 'Phòng chưa gắn node', tone: 'text-ink-soft', icon: Info }
-  if (stale) {
-    return {
-      text:
-        overall === 'alarm'
-          ? 'Node mất kết nối, cảnh báo giữ tới khi có số đo mới'
-          : 'Node mất kết nối, số đo là số đo cũ',
-      tone: 'text-offline-ink',
-      icon: WifiOff,
-    }
-  }
-  if (overall === 'alarm' && status.hazardSigns.length > 0 && !v.hasNotice) {
-    return {
-      text: `Phát hiện: ${status.hazardSigns.map((s) => hazardSignLabel[s]).join(', ')}`,
-      tone: 'text-alarm-deep',
-      icon: TriangleAlert,
-    }
-  }
-  if (overall === 'maintenance') {
-    return {
-      text: 'Đang bảo trì, số đo chỉ để tham khảo',
-      tone: 'text-maintenance-ink',
-      icon: Wrench,
-    }
-  }
-  if (v.faultNotes.length > 0) {
-    return { text: v.faultNotes.join('. '), tone: 'text-fault-ink', icon: TriangleAlert }
-  }
-  if (v.warmingNotes.length > 0) {
-    return { text: v.warmingNotes.join('. '), tone: 'text-board-900', icon: Hourglass }
-  }
-  return null
+  return (
+    <li className="flex min-w-0 flex-col gap-2 border-t border-rule pt-2.5">
+      <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-1 text-sm">
+        <span className="min-w-0 font-semibold break-all">
+          {node.id}
+          {node.code !== node.id && (
+            <span className="ml-2 font-normal text-ink-soft">{node.code}</span>
+          )}
+        </span>
+        <span className={cn('text-xs font-semibold', stale ? 'text-offline-ink' : 'text-ink-soft')}>
+          {nodeStatus(node)}
+        </span>
+      </div>
+      {node.sensors.length > 0 && (
+        <>
+          <dl className="grid grid-cols-3 gap-2">
+            {node.sensors.map((sensor) => (
+              <SensorCell key={sensor.kind} sensor={sensor} stale={stale} />
+            ))}
+          </dl>
+          {notes.length > 0 && (
+            <p
+              className={cn(
+                'text-xs font-semibold',
+                node.sensors.some((sensor) => isFault(sensor.state))
+                  ? 'text-fault-ink'
+                  : 'text-board-900',
+              )}
+            >
+              {notes.join('. ')}
+            </p>
+          )}
+          <p className={cn('tabular text-xs', stale ? 'text-offline-ink' : 'text-ink-soft')}>
+            {when
+              ? stale
+                ? `Số đo cũ, nhận lúc ${when}`
+                : `Nhận lúc ${when}`
+              : 'Chưa gửi dữ liệu'}
+          </p>
+        </>
+      )}
+    </li>
+  )
 }
 
-/** Thẻ một phòng trên trang tổng quan (US1). `notice` là tờ sự cố ghim lên thẻ (US2). */
+/** Thẻ một phòng trên trang tổng quan. */
 export function RoomCard({
   status,
-  sensors,
+  nodes,
   overall,
   now,
   notice,
-  blockedNodeId = null,
 }: {
   status: RoomStatus
-  sensors: SensorView[]
+  nodes: RoomNodeView[]
   overall: RoomOverall
   now: Date
   notice?: ReactNode
-  /** Node của phòng đang bị quản trị viên khoá (không có trong /api/rooms/status). */
-  blockedNodeId?: string | null
 }) {
   const style = roomStatusStyle[overall]
-  // Node mất kết nối thì số đo là số đo cũ, kể cả khi phòng đang cảnh báo hoặc bảo trì (lỗi A).
-  const stale = status.node?.connectivity === 'offline' && status.node.lastSeenAt !== null
-  // Không có node đang chạy (chưa gắn, bị khoá) thì backend không có số đo: không phải lỗi cảm biến.
-  const faultNotes = status.node ? sensors.filter((s) => isFault(s.state)).map(sensorNote) : []
-  const warmingNotes = sensors.filter((s) => s.state === 'warming_up').map(sensorNote)
-  const foot = footer(status, stale, now, blockedNodeId)
-  const line = statusLine({ status, overall, stale, faultNotes, warmingNotes, hasNotice: !!notice })
+  const onlineCount = nodes.filter(
+    (node) =>
+      (node.lifecycle === 'active' || node.lifecycle === 'maintenance') &&
+      node.connectivity === 'online',
+  ).length
 
   return (
     <article
@@ -199,42 +174,39 @@ export function RoomCard({
     >
       {notice}
       <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
-        <header className="flex min-w-0 items-center justify-between gap-3">
-          <h2
-            id={`room-${status.room.id}`}
-            className="tabular truncate text-xl font-bold tracking-tight"
-          >
-            Phòng {roomNumber(status.room.name)}
-          </h2>
+        <header className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2
+              id={`room-${status.room.id}`}
+              className="tabular truncate text-xl font-bold tracking-tight"
+            >
+              Phòng {roomNumber(status.room.name)}
+            </h2>
+            {nodes.length > 0 && (
+              <p className="text-xs text-ink-soft">
+                {onlineCount}/{nodes.length} node online
+              </p>
+            )}
+          </div>
           <StatusPill status={overall} className="shrink-0 whitespace-nowrap" />
         </header>
 
-        {/* Một dòng cố định cho điều quan trọng nhất, để thẻ không cao lên khi có thêm thông tin. */}
-        <p
-          className={cn('flex h-5 min-w-0 items-center gap-1.5 text-sm font-semibold', line?.tone)}
-          title={line?.text}
-        >
-          {line && <line.icon aria-hidden className="size-4 shrink-0" />}
-          <span className="min-w-0 truncate">{line?.text}</span>
-        </p>
-
-        {status.node && (
-          <dl className="grid grid-cols-3 gap-2">
-            {sensors.map((sensor) => (
-              <SensorCell key={sensor.kind} sensor={sensor} stale={stale} />
-            ))}
-          </dl>
+        {overall === 'alarm' && status.hazardSigns.length > 0 && !notice && (
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-alarm-deep">
+            <TriangleAlert aria-hidden className="size-4 shrink-0" />
+            Phát hiện {status.hazardSigns.map((sign) => hazardSignLabel[sign]).join(', ')}
+          </p>
         )}
 
-        <footer
-          className={cn(
-            'mt-auto flex items-center justify-between gap-3 border-t border-rule pt-2.5 text-xs',
-            stale ? 'font-semibold text-offline-ink' : 'text-ink-soft',
-          )}
-        >
-          <span className="truncate">{foot.node}</span>
-          <span className="tabular shrink-0">{foot.when}</span>
-        </footer>
+        {nodes.length > 0 ? (
+          <ul className="flex flex-col gap-3">
+            {nodes.map((node) => (
+              <NodeReadings key={node.id} node={node} now={now} />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-ink-soft">Phòng chưa gắn node</p>
+        )}
       </div>
     </article>
   )

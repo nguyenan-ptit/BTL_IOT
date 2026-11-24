@@ -62,7 +62,7 @@
 - Đây là ghi nhận lịch sử có thời điểm; không khẳng định thiết bị đang online khi người đọc mở repo.
 - Chưa có biên bản riêng xác nhận hash/marker đang chạy trên cả hai bo, nhánh D1 của từng mạch, tiếng còi, màu/nhịp LED thực tế, mất nguồn cảm biến hoặc ngưỡng được lưu qua khởi động lại trên từng bo.
 
-## Cần hoàn tất với Long
+## Nghiệm thu firmware và backend theo node
 
 Lập biên bản theo từng ID cho telemetry/topic, mất mạng/phục hồi, đổi/lưu ngưỡng, thử/stop đầu ra, ưu tiên cảnh báo và lỗi cảm biến; xem [HANDOVER](HANDOVER.md). ACK và kết quả mô phỏng chỉ xác nhận phần mềm trong phạm vi đã kiểm tra, không thay việc nghe còi/nhìn LED hoặc kiểm tra dây/nguồn.
 

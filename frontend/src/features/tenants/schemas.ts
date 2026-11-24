@@ -40,3 +40,16 @@ export const createTenantResponseSchema = z.looseObject({
   }),
 })
 export type CreatedTenant = z.infer<typeof createTenantResponseSchema>['user']
+
+const tenantAssignmentSchema = z.object({
+  assignment_id: z.number().int().positive(),
+  username: z.string(),
+  display_name: z.string().nullable(),
+  room_id: z.string(),
+  room_name: z.string(),
+  house_name: z.string(),
+})
+export type TenantAssignment = z.infer<typeof tenantAssignmentSchema>
+
+export const tenantAssignmentsSchema = z.object({ items: z.array(tenantAssignmentSchema) })
+export const tenantAssignmentUpdateSchema = z.object({ message: z.string() })

@@ -108,16 +108,15 @@ function RoomOverview({ now }: { now: Date }) {
             </EmptyState>
           ) : (
             <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {shown?.map(({ status, sensors, overall, blockedNodeId }) => {
+              {shown?.map(({ status, nodes, overall }) => {
                 const incident = active.data?.find((i) => i.id === status.activeIncidentId)
                 return (
                   <li key={status.room.id} className="flex min-w-0">
                     <div className="min-w-0 flex-1">
                       <RoomCard
                         status={status}
-                        sensors={sensors}
+                        nodes={nodes}
                         overall={overall}
-                        blockedNodeId={blockedNodeId}
                         now={now}
                         notice={
                           incident ? <IncidentNotice incident={incident} now={now} /> : undefined

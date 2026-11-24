@@ -13,7 +13,14 @@ function createQueryClient() {
 
 /** Khi bất kỳ API nào trả 401, đánh dấu đã đăng xuất để guard đưa về trang đăng nhập. */
 function SessionWatcher({ client }: { client: QueryClient }) {
-  useEffect(() => onUnauthorized(() => client.setQueryData(authKeys.me, null)), [client])
+  useEffect(
+    () =>
+      onUnauthorized(() => {
+        client.clear()
+        client.setQueryData(authKeys.me, null)
+      }),
+    [client],
+  )
   return null
 }
 

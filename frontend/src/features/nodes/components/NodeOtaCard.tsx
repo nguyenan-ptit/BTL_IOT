@@ -66,8 +66,10 @@ export function NodeOtaCard({
   const client = useQueryClient()
   const releases = useFirmwareReleases(deviceId, overview.data?.enabled === true)
   const fileInput = useRef<HTMLInputElement>(null)
+  const manifestInput = useRef<HTMLInputElement>(null)
   const [version, setVersion] = useState('')
   const [file, setFile] = useState<File>()
+  const [manifest, setManifest] = useState<File>()
   const [error, setError] = useState('')
   const [selected, setSelected] = useState('')
   const [confirm, setConfirm] = useState(false)
@@ -76,13 +78,15 @@ export function NodeOtaCard({
   const selectedRelease = releases.data?.find((release) => release.firmware_id === selected)
 
   const upload = useMutation({
-    mutationFn: ({ version, file }: { version: string; file: File }) =>
-      uploadFirmware(deviceId, version, file),
+    mutationFn: ({ version, file, manifest }: { version: string; file: File; manifest: File }) =>
+      uploadFirmware(deviceId, version, file, manifest),
     onSuccess: (release) => {
       setSelected(release.firmware_id)
       setVersion('')
       setFile(undefined)
+      setManifest(undefined)
       if (fileInput.current) fileInput.current.value = ''
+      if (manifestInput.current) manifestInput.current.value = ''
       void client.invalidateQueries({ queryKey: releaseKey(deviceId) })
     },
   })
@@ -106,7 +110,15 @@ export function NodeOtaCard({
     if (!file || !/\.bin$/i.test(file.name) || file.size > 1024 * 1024) {
       return setError('Chọn file .bin đã ký, dung lượng tối đa 1 MiB.')
     }
-    upload.mutate({ version: value, file })
+    if (
+      !manifest ||
+      !/\.manifest$/i.test(manifest.name) ||
+      manifest.size === 0 ||
+      manifest.size > 1024
+    ) {
+      return setError('Chọn file .manifest tạo cùng với file .bin.')
+    }
+    upload.mutate({ version: value, file, manifest })
   }
 
   const unavailable = !overview.data?.mqtt_ready
@@ -186,6 +198,18 @@ export function NodeOtaCard({
                   accept=".bin"
                   required
                   onChange={(event) => setFile(event.target.files?.[0])}
+                />
+                <label htmlFor="ota-manifest" className="text-sm font-semibold">
+                  Manifest đã ký
+                </label>
+                <input
+                  id="ota-manifest"
+                  ref={manifestInput}
+                  className={inputClass}
+                  type="file"
+                  accept=".manifest"
+                  required
+                  onChange={(event) => setManifest(event.target.files?.[0])}
                 />
                 <Button type="submit" variant="secondary" loading={upload.isPending}>
                   Tải lên

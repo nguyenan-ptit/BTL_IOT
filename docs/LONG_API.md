@@ -1,10 +1,10 @@
 # API dữ liệu, điều khiển và vòng đời thiết bị
 
-Hợp đồng cho phần việc của Long, ngày 06/11/2026. Xem [cách chạy backend](../backend/README.md), [database/migration](../database/README.md) và [bằng chứng kiểm thử](LONG_IMPLEMENTATION_STATUS.md). Tài liệu này mô tả mã đã triển khai; khả năng của deployment EMQX thật phải được kiểm tra riêng.
+Hợp đồng API dữ liệu và điều khiển thiết bị. Xem [cách chạy backend](../backend/README.md), [database/migration](../database/README.md) và [bằng chứng kiểm thử](LONG_IMPLEMENTATION_STATUS.md). Kiểm tra khả năng quản trị trên bản triển khai EMQX đang sử dụng.
 
 ## Xác thực và quyền
 
-Mọi API dữ liệu/quản lý/điều khiển yêu cầu `Authorization: Bearer <token>`. Dịch vụ tài khoản của người 3 ký HS256 bằng `JWT_SECRET` dùng chung, ít nhất 32 ký tự. Token có `user_id` số nguyên dương, `role` và `exp`; backend đối chiếu lại user/role/status trong MySQL. Không có endpoint tự đăng nhập hoặc tự cấp token ở phần này.
+Mọi API dữ liệu, quản lý và điều khiển yêu cầu `Authorization: Bearer <token>`. Lấy token qua `POST /api/auth/login`. Backend ký HS256 bằng `JWT_SECRET` dài ít nhất 32 ký tự. Token có `user_id` số nguyên dương, `role` và `exp`. Backend đối chiếu tài khoản, vai trò và trạng thái trong MySQL.
 
 | Người gọi | Đọc | Quản lý/điều khiển |
 |---|---|---|
@@ -98,9 +98,9 @@ API không cho đặt `credential_status=active` hoặc `pending` bằng PATCH v
 {"action":"reissue","password":"<mật khẩu mới 16–128 ký tự>"}
 ```
 
-Mỗi lần cấp/cấp lại dùng username mới; retry cùng operation_id tái sử dụng đúng username đó và yêu cầu đúng mật khẩu ban đầu. Không trả lại mật khẩu, không lưu mật khẩu thuần và không ghi khóa quản trị vào response/log. Người gọi giữ mật khẩu để chuyển riêng cho người 1 và để retry. Backend chỉ lưu PBKDF2 digest có salt từ mã thao tác.
+Mỗi lần cấp/cấp lại dùng username mới; retry cùng operation_id tái sử dụng đúng username đó và yêu cầu đúng mật khẩu ban đầu. Không trả lại mật khẩu, không lưu mật khẩu thuần và không ghi khóa quản trị vào response/log. Người gọi giữ mật khẩu để chuyển riêng cho người phụ trách firmware và để retry. Backend chỉ lưu PBKDF2 digest có salt từ mã thao tác.
 
-Luồng cấp: chặn backend → kiểm tra khả năng/quyền đọc/policy → đặt ACL deny trên tài khoản mới → tạo/cập nhật tài khoản không có superuser → thu hồi tài khoản cũ đã xác minh nếu có → cấp đúng ba topic riêng của node và deny các topic khác → ngắt phiên cần thiết → ghi synced/credential active/lifecycle provisioned. Người 1 nạp cấu hình và kiểm tra ESP, sau đó mới PATCH lifecycle active.
+Luồng cấp: chặn backend → kiểm tra khả năng/quyền đọc/policy → đặt ACL deny trên tài khoản mới → tạo/cập nhật tài khoản không có superuser → thu hồi tài khoản cũ đã xác minh nếu có → cấp đúng ba topic riêng của node và deny các topic khác → ngắt phiên cần thiết → ghi synced/credential active/lifecycle provisioned. Người phụ trách firmware nạp cấu hình và kiểm tra ESP trước khi PATCH lifecycle active.
 
 Luồng thu hồi: commit credential revoked và lifecycle blocked/decommissioned **trước** mọi yêu cầu HTTP → deny topic → xóa tài khoản → tra username và ngắt từng Client ID liên quan → kiểm tra không còn phiên → ghi kết quả. Chỉ disconnect mà không xóa tài khoản không được coi là thu hồi.
 
@@ -171,6 +171,6 @@ Trước khi đặt `policy_verified=true`, quản trị viên kiểm tra trên 
 | 503 | DB/MQTT/cấu hình xác thực chưa sẵn sàng; không hiển thị lệnh đã thực hiện |
 | 202 + incomplete | Backend đã chặn, EMQX chưa hoàn tất; hiển thị bước lỗi và nút retry |
 
-Người 3 cung cấp token từ đăng nhập thật và kiểm tra locked/role/phạm vi với tài khoản thật. Người 4 tích hợp endpoint và trạng thái ở trên; frontend mock hiện có chưa phải bằng chứng đã nối backend. Người 1 nạp username/password mới, kiểm tra telemetry và xác nhận đầu ra vật lý.
+Lấy token từ `POST /api/auth/login` và dùng tài khoản thử để kiểm tra trạng thái khóa, vai trò và phạm vi phòng. Đối chiếu trạng thái trên giao diện với phản hồi API. Khi đổi thông tin MQTT cho ESP, kiểm tra lại telemetry và đầu ra vật lý.
 
 Nghiệm thu broker thật phải chứng minh: node không publish/subscribe topic node khác, phiên cũ bị ngắt, mật khẩu/username cũ không kết nối lại được, EMQX lỗi không báo thành công chung, retry không tạo tài khoản trùng và cấp lại giữ device_id/history. Nghiệm thu ESP phải có ACK ngưỡng, timeout, thử/dừng còi và LED; kết quả phần mềm không thay tiếng còi/đèn thực tế.

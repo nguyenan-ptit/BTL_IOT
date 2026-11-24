@@ -97,7 +97,10 @@ API cho quản trị viên:
 
 - `POST /api/firmware?device_id=node10&version=v1.0.1` nhận nội dung
   file đã ký dưới dạng `application/octet-stream`, tối đa 1 MiB. BE kiểm tra
-  chữ ký RSA-2048 và lưu bản cho đúng node trong MySQL.
+  chữ ký RSA-2048 và lưu bản cho đúng node trong MySQL. Tải lên cần thêm header
+  `X-IoT-Firmware-Manifest` chứa dòng duy nhất trong file `.manifest` tạo cùng
+  file `.bin`. Backend kiểm tra chữ ký manifest, node đích, phiên bản và SHA-256
+  của toàn bộ file đã ký trước khi ghi vào MySQL.
 - `GET /api/firmware?device_id=node10` liệt kê các bản của node.
 - `POST /api/devices/{device_id}/ota` nhận `firmware_id`, trả HTTP 202 và
   `job_id`. Backend kiểm tra quyền, telemetry gần nhất, hỗ trợ OTA,
@@ -123,29 +126,38 @@ API cho quản trị viên:
    chuyển hướng với đường dẫn này. Uvicorn loại query ở access log cho
    đường dẫn tải. Nếu có reverse proxy, cấu hình log bỏ query hoặc tắt log
    cho endpoint này.
-4. Mở **Quản trị → Node → chi tiết node → Cập nhật firmware**. Upload bản
-   đã ký dành riêng cho node, chọn bản, xác nhận và theo dõi job.
+4. Mở **Quản trị → Node → chi tiết node → Cập nhật firmware**. Điền phiên bản
+   từ bản build. Tải file `.signed.bin` và `.manifest` từ cùng thư mục kết
+   quả, chọn bản, xác nhận và theo dõi job.
 
 ## Chuẩn bị hai bản để thử
 
 1. Tạo `config.h` cục bộ và đặt `OTA_ENABLED=1`, hostname tải, CA HTTPS và
    khóa **công khai** RSA-2048 để xác minh chữ ký. Giữ khóa riêng ký file ở
    ngoài repo và ngoài bản firmware. Node cần đồng bộ được NTP.
-2. Build `v1.0.0` và nạp USB lần đầu. Build `v1.0.1` với cùng ID, thông
-   tin MQTT, khóa công khai, board và thiết lập flash. Ký file bằng
-   `tools/signing.py` của ESP8266 Arduino Core và upload kết quả đã ký.
+2. Build `v1.0.0` và nạp USB lần đầu. Đặt `NODE_FIRMWARE_VERSION` thành
+   `v1.0.1`, giữ cùng ID, thông tin MQTT, khóa công khai, board và thiết lập
+   flash. Chạy công cụ tạo bản FOTA bên dưới. Công cụ lấy ID và phiên bản
+   từ cùng bản sao cấu hình được dùng để biên dịch rồi ký cả hai file.
    Vì bản build hiện chứa cấu hình MQTT của node, xử lý file như dữ liệu
    có thông tin đăng nhập. Chỉ dùng bản build cho đúng node được cấu hình.
 3. Xác nhận BE thấy `v1.0.0` và `ota_supported: true`. Tạo job, kiểm tra
    tiến độ, rồi đối chiếu `booted` và telemetry của `v1.0.1`. Thử thêm
    file sai hash hoặc sai chữ ký và kiểm tra node còn chạy bản cũ.
 
-Ví dụ lệnh ký và tính SHA-256 trong PowerShell:
+Từ thư mục gốc trên PowerShell, dùng Python trong môi trường đã cài các
+thư viện của backend và Arduino CLI đã cài core, board, thư viện dự án:
 
 ```powershell
-python 'C:/duong-dan-den-esp8266-core/tools/signing.py' --mode sign --privatekey private.key --bin node_full.ino.bin --out v1.0.1.bin
-Get-FileHash .\v1.0.1.bin -Algorithm SHA256
+.\.venv\Scripts\python.exe .\firmware\build_ota_release.py --private-key "C:\duong-dan\firmware-private.pem"
 ```
+
+Nếu Arduino CLI chưa có trong `PATH`, truyền `--arduino-cli "C:\duong-dan\arduino-cli.exe"`.
+Mặc định công cụ dùng board `esp8266:esp8266:nodemcuv2` và lưu cả hai file
+trong `firmware/build/ota/<device_id>-<version>/`.
+
+Cơ chế kiểm tra manifest áp dụng lúc tải lên. Các bản đã lưu trước khi
+nâng cấp không có manifest đã được kiểm tra.
 
 Firmware từ chối OTA khi đang báo động, thử còi hoặc thiết lập kết nối
 Wi-Fi mới. Phần tải đọc từng khối để vòng lặp còn lấy mẫu cảm biến. Bắt

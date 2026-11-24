@@ -82,34 +82,36 @@ Xong thì dùng lại tài khoản ứng dụng trước khi chạy server. Migr
 
 ## 5. JWT và tài khoản
 
-Khi tích hợp, Vĩ cung cấp dịch vụ đăng ký/đăng nhập và khóa JWT dùng chung. Trong CMD sẽ chạy BE, đặt khóa ít nhất 32 ký tự:
+API `POST /api/auth/login` cấp JWT cho tài khoản hoạt động trong MySQL. Đặt `JWT_SECRET` riêng, dài ít nhất 32 ký tự trong `.env` ở gốc repo hoặc trong cửa sổ CMD sẽ chạy backend.
 
 ```bat
-set "JWT_SECRET=<khoa-JWT-rieng-dung-chung-voi-dich-vu-tai-khoan>"
+set "JWT_SECRET=<khoa-JWT-rieng>"
 ```
 
 Thay placeholder bằng khóa thực tế; không dùng nguyên chuỗi ví dụ. `set` chỉ áp dụng cho cửa sổ CMD hiện tại. Giữ cùng khóa khi khởi động lại nếu muốn token chưa hết hạn tiếp tục dùng được.
 
-Nếu chưa tích hợp dịch vụ tài khoản và chỉ thử local, có thể sinh khóa test bằng:
+Có thể sinh khóa dùng riêng cho môi trường thử bằng lệnh sau.
 
 ```bat
 .venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Copy kết quả vào lệnh set JWT_SECRET trên, giữ riêng trên máy. Để thử admin mẫu, sau khi đã chạy test_data.sql, dùng Workbench trên DB test:
+Dùng kết quả làm `JWT_SECRET` cho môi trường thử. Để dùng admin mẫu, áp dụng `database/test_data.sql` vào database thử, chọn đúng schema thử trong Workbench rồi chạy các câu SQL sau.
 
 ```sql
-UPDATE iot_db.users SET status = 'active' WHERE user_id = 1001;
-SELECT user_id, role, status FROM iot_db.users WHERE user_id = 1001;
+UPDATE users SET status = 'active' WHERE user_id = 1001 AND username = 'test_admin';
+SELECT user_id, role, status FROM users WHERE user_id = 1001;
 ```
 
-Trong cùng CMD đã đặt JWT_SECRET, tạo token test trước khi khởi động server:
+Trỏ cấu hình MySQL của backend tới database thử. Từ gốc repo, đặt mật khẩu cho `test_admin` bằng script sau. Script hỏi username và mật khẩu mới. Sau khi chạy backend ở bước 6, dùng tài khoản này để đăng nhập web hoặc gọi `POST /api/auth/login` và lấy `accessToken` để thử API.
 
 ```bat
-.venv\Scripts\python.exe -c "import os,time,jwt; print(jwt.encode({'user_id':1001,'role':'admin','exp':int(time.time())+3600},os.environ['JWT_SECRET'],algorithm='HS256'))"
+cd backend
+..\.venv\Scripts\python.exe -m scripts.set_demo_password
+cd ..
 ```
 
-Copy riêng chuỗi bắt đầu bằng eyJ để dùng Swagger. Token này có hạn một giờ, chỉ là công cụ test; không chứng minh luồng đăng ký/đăng nhập đã hoạt động. Không có API đăng ký/đăng nhập người dùng trong phần BE của Long. User 1002/1003 chỉ dùng được khi đã active và có đúng quan hệ nhà/phòng; role admin không đồng nghĩa với tài khoản MQTT admin.
+Với user 1002/1003, đặt mật khẩu, kích hoạt và kiểm tra quan hệ nhà/phòng trước khi thử quyền theo vai trò.
 
 Nếu dùng PowerShell: đặt `$env:JWT_SECRET = '<khoa-rieng>'` thay cho lệnh set của CMD, rồi chạy các lệnh Python trong cùng cửa sổ đó.
 
@@ -124,9 +126,9 @@ Nếu dùng PowerShell: đặt `$env:JWT_SECRET = '<khoa-rieng>'` thay cho lện
 - http://127.0.0.1:8000/api/health: công khai; mqtt.connected=true xác nhận BE đã nối và subscribe thành công, không chứng minh mọi node đã được cấp quyền đúng.
 - http://127.0.0.1:8000/docs: Swagger. Bấm Authorize, dán riêng token, không thêm chữ Bearer. Xóa token cũ bằng Logout khi đổi tài khoản.
 - GET /api/devices và GET /api/history?device_id=node01: cần token hợp lệ.
-- http://127.0.0.1:8000/: trang thử API; không phải frontend React đã tích hợp.
+- http://127.0.0.1:8000/: trang thử API. Để mở website React, làm theo [hướng dẫn frontend](../frontend/README.md).
 
-Mặc định chỉ truy cập trên máy local. Khi triển khai cho thành viên khác cần thống nhất địa chỉ, reverse proxy HTTPS, cấu hình frontend và dịch vụ tài khoản; hiện chưa bàn giao một deployment production.
+Mặc định backend chỉ nghe trên máy local. Khi triển khai cho thành viên khác, thống nhất địa chỉ backend, reverse proxy HTTPS và cấu hình frontend.
 
 ## 7. Test chức năng và giới hạn hiện tại
 
@@ -135,7 +137,7 @@ Mặc định chỉ truy cập trên máy local. Khi triển khai cho thành vi�
 - POST /api/devices/register chỉ tạo registry registered/pending, chưa tạo tài khoản EMQX.
 - POST mqtt-credentials với provision/revoke/reissue cần API quản trị broker tương thích. Cấu hình disabled/Serverless hiện trả incomplete; khi đã bắt đầu thu hồi, BE giữ chặn node. Không dùng thao tác này để thử khóa tạm BE.
 - Chưa có API xác nhận cấp thủ công cho node mới trên Serverless. Dữ liệu seed active/active phục vụ ingestion test, không phải quy trình onboarding hoàn chỉnh.
-- Lịch sử/lệnh có kiểm tra quyền; ACK trong payload cần đối chiếu với đầu ra còi/LED thật. Tích hợp JWT của Vĩ, frontend của Nguyên và deployment còn cần thực hiện.
+- Dùng tài khoản thử để kiểm tra quyền với dữ liệu lịch sử và lệnh điều khiển. Đối chiếu ACK với còi/LED trên từng node.
 
 Kiểm thử phần mềm:
 

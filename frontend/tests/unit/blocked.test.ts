@@ -13,8 +13,22 @@ const noNode: RoomStatus = {
 
 describe('node bị quản trị viên khoá', () => {
   it('phòng có node bị khoá hiện "Tạm khoá", không phải "Chưa có thiết bị"', () => {
-    expect(computeRoomOverall(noNode, null, true)).toBe('blocked')
-    expect(computeRoomOverall(noNode, null, false)).toBe('no_device')
+    expect(
+      computeRoomOverall({
+        ...noNode,
+        nodes: [
+          {
+            id: 'node01',
+            code: 'node01',
+            lifecycle: 'blocked',
+            connectivity: 'offline',
+            lastSeenAt: null,
+            sensors: [],
+          },
+        ],
+      }),
+    ).toBe('blocked')
+    expect(computeRoomOverall(noNode)).toBe('no_device')
   })
 
   it('trang admin: khoá, bảo trì, ngừng sử dụng không bị tính là mất kết nối', () => {

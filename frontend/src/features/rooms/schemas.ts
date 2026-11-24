@@ -19,6 +19,7 @@ export const roomSchema = z.object({
   boardingHouseId: z.string(),
   name: z.string(),
   activeNodeId: z.string().nullable(),
+  activeNodeIds: z.array(z.string()).optional(),
 })
 export type Room = z.infer<typeof roomSchema>
 
@@ -42,10 +43,17 @@ export const roomNodeSummarySchema = z.object({
   lastSeenAt: dateTimeSchema.nullable(),
 })
 
+const roomNodeStatusSchema = roomNodeSummarySchema.extend({
+  lifecycle: nodeLifecycleSchema.or(z.literal('blocked')),
+  sensors: z.array(sensorReadingSchema),
+})
+export type RoomNodeStatus = z.infer<typeof roomNodeStatusSchema>
+
 export const roomStatusSchema = z.object({
   room: roomSchema.pick({ id: true, name: true, boardingHouseId: true }),
   node: roomNodeSummarySchema.nullable(),
   sensors: z.array(sensorReadingSchema),
+  nodes: z.array(roomNodeStatusSchema).optional(),
   activeIncidentId: z.string().nullable(),
   hazardSigns: z.array(hazardSignSchema),
 })

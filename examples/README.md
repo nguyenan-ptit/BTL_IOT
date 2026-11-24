@@ -1,4 +1,4 @@
-# JSON mô phỏng để Long tích hợp MQTT
+# JSON mô phỏng để tích hợp MQTT
 
 **Tất cả tệp ở đây là MÔ PHỎNG**, dùng ID demo và mã hex giả. Không phải số đo thật, không phải lệnh đã gửi và không dùng làm biên bản nghiệm thu. Các số uptime/hạn dùng chỉ minh họa một lần chạy giả, không dùng lại để điều khiển thiết bị đang vận hành.
 

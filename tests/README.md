@@ -1,6 +1,6 @@
 # Kiểm thử firmware P1
 
-## Backend theo checklist của Long
+## Kiểm thử backend
 
 Từ thư mục gốc, cài backend/requirements-dev.txt vào môi trường riêng rồi chạy:
 

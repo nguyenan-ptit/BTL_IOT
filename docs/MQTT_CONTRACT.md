@@ -1,6 +1,6 @@
 # Hợp đồng MQTT của firmware
 
-Tài liệu này mô tả hợp đồng firmware ESP và dữ liệu mẫu. Backend FastAPI trong `backend/` hiện gồm subscriber, validation schema 6, MySQL storage và API có xác thực. Telemetry thật từ node01/node02 qua EMQX Cloud đã được quan sát trong buổi test local; tích hợp đăng nhập/frontend, quản trị tài khoản broker tự động và deployment vẫn còn việc cần hoàn tất. Xem [bàn giao hiện tại](HANDOVER.md) và [trạng thái kiểm thử](LONG_IMPLEMENTATION_STATUS.md). Tất cả [JSON mẫu](../examples/README.md) là MÔ PHỎNG, không phải dữ liệu thật hay lệnh đã gửi.
+Tài liệu này mô tả hợp đồng firmware ESP và dữ liệu mẫu. Backend FastAPI nhận MQTT, kiểm tra schema 6, lưu MySQL và cung cấp API có xác thực cho frontend. Telemetry từ node01/node02 qua EMQX Cloud đã được quan sát trong buổi test local. Xem [bàn giao](HANDOVER.md) và [trạng thái kiểm thử](LONG_IMPLEMENTATION_STATUS.md). Các [tệp JSON mẫu](../examples/README.md) chứa dữ liệu mô phỏng.
 
 ## 1. Topic, định danh và kênh truyền
 
@@ -143,7 +143,7 @@ fire-alarm-broker|1|<nonce>|<host>|<port>
 
 ESP yêu cầu nonce đang chờ, tuổi dưới 3000 ms, chỉ chấp nhận một lần; source UDP port=41884; IP nguồn=host đã ký; nguồn và ESP cùng subnet IPv4 riêng hợp lệ, không phải địa chỉ mạng/broadcast. Dải hỗ trợ: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16; subnet mask liên tục /30 hoặc rộng hơn. Không áp dụng cho 172.11.* hoặc IP công cộng.
 
-Responder nên chỉ quảng bá khi chính phía nhận đã nối/đăng ký MQTT thành công, có giới hạn tốc độ và kích thước. Long tạo và giữ cặp khóa riêng qua kênh riêng tư, dùng cùng khóa trên server và các ESP; không tạo khóa khác cho từng bo. Không đưa khóa thật vào Git, tài liệu hoặc ví dụ.
+Responder nên chỉ quảng bá khi phía nhận đã kết nối và đăng ký MQTT thành công, có giới hạn tốc độ và kích thước. Cấu hình cùng khóa discovery trên server và các ESP qua kênh riêng tư. Giữ khóa thật ngoài Git, tài liệu và ví dụ.
 
 Discovery không đổi Wi-Fi, không sửa config.h và không tự nạp chương trình. Mạng khách/hotspot cách ly, firewall hoặc VPN chọn sai tuyến có thể chặn UDP. Trong chế độ LAN, nếu không tìm được thì MQTT_HOST phải là IPv4 dự phòng đúng. HMAC discovery xác thực thông tin broker LAN, không mã hóa TCP MQTT trong chế độ đó; cloud TLS dùng đường kết nối riêng được mô tả ở mục 1 và [CLOUD_MQTT](CLOUD_MQTT.md).
 

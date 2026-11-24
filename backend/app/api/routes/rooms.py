@@ -1,9 +1,10 @@
+from collections import defaultdict
 from datetime import datetime, timezone
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query as ORMQuery, Session, aliased
 
 from app.core.access import can_access_room
 from app.core.dependencies import get_current_user
@@ -22,6 +23,7 @@ from app.schemas.rooms import BoardingHouseCreateRequest, RoomCreateRequest
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 houses_router = APIRouter(prefix="/api/boarding-houses", tags=["Rooms"])
 HAZARDS = {"gas", "high_temperature", "flame"}
+MONITORING_LIFECYCLES = ("active", "maintenance")
 
 
 def _payload(measurement: Measurement | None) -> dict:
@@ -62,13 +64,45 @@ def _room_query(db: Session, user: User):
     ).distinct()
 
 
-def _public_room(room: Room, active_node: Node | None = None):
+def _public_room(room: Room, active_node_ids: list[str] | None = None):
+    active_node_ids = active_node_ids or []
     return {
         "id": str(room.id),
         "boardingHouseId": str(room.boarding_house_id),
         "name": room.name,
-        "activeNodeId": str(active_node.id) if active_node else None,
+        "activeNodeId": active_node_ids[0] if active_node_ids else None,
+        "activeNodeIds": active_node_ids,
     }
+
+
+def _latest_node_measurements(db: Session, nodes: ORMQuery):
+    latest = aliased(Measurement)
+    latest_id = db.query(latest.id).filter(
+        latest.node_id == Node.id,
+        latest.room_id == Node.room_id,
+    ).order_by(latest.measured_at.desc(), latest.id.desc()).limit(1).correlate(Node).scalar_subquery()
+    return nodes.add_entity(Measurement).outerjoin(Measurement, Measurement.id == latest_id).all()
+
+
+def _sensors(measurement: Measurement | None):
+    payload = _payload(measurement)
+    flame_data = payload.get("flame") if isinstance(payload.get("flame"), dict) else {}
+    gas_health = _health(payload, "mq2", "fault")
+    temperature_health = _health(payload, "temperature", "fault")
+    flame_health = _health(payload, "flame", "fault")
+    return [
+        {"kind": "gas", "health": gas_health,
+         "value": measurement.gas_value if measurement and gas_health == "ok" else None},
+        {"kind": "temperature", "health": temperature_health,
+         "value": measurement.temperature_value if measurement and temperature_health == "ok" else None},
+        {"kind": "flame", "health": flame_health,
+         "value": flame_data.get("alarm") if flame_health == "ok" and type(flame_data.get("alarm")) is bool else None},
+    ]
+
+
+def _node_summary(node: Node):
+    return {"id": str(node.id), "code": node.code, "lifecycle": node.lifecycle,
+            "connectivity": node.connectivity, "lastSeenAt": _iso(node.last_seen_at)}
 
 
 @router.get("")
@@ -81,14 +115,13 @@ def get_rooms(
     if boardingHouseId:
         query = query.filter(Room.boarding_house_id == boardingHouseId)
     rooms = query.order_by(Room.id).all()
-    result = []
-    for room in rooms:
-        node = db.query(Node).filter(
-            Node.room_id == room.id,
-            Node._lifecycle.in_(("active", "maintenance")),
-        ).first()
-        result.append(_public_room(room, node))
-    return result
+    ids_by_room = defaultdict(list)
+    for room_id, node_id in db.query(Node.room_id, Node.id).filter(
+        Node.room_id.in_([room.id for room in rooms]),
+        Node._lifecycle.in_(MONITORING_LIFECYCLES),
+    ).order_by(Node.id):
+        ids_by_room[room_id].append(str(node_id))
+    return [_public_room(room, ids_by_room[room.id]) for room in rooms]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -132,42 +165,36 @@ def get_room_statuses(
     query = _room_query(db, current_user)
     if boardingHouseId:
         query = query.filter(Room.boarding_house_id == boardingHouseId)
+    rooms = query.order_by(Room.id).all()
+    nodes_by_room = defaultdict(list)
+    nodes = db.query(Node).filter(
+        Node.room_id.in_([room.id for room in rooms]),
+        Node._lifecycle != "decommissioned",
+    ).order_by(Node.id)
+    for node, measurement in _latest_node_measurements(db, nodes):
+        summary = _node_summary(node)
+        if node._lifecycle == "blocked":
+            summary["lifecycle"] = "blocked"
+        monitoring = node._lifecycle in MONITORING_LIFECYCLES
+        nodes_by_room[node.room_id].append({**summary, "sensors": _sensors(measurement) if monitoring else []})
+
     results = []
-    for room in query.order_by(Room.id).all():
-        node = db.query(Node).filter(
-            Node.room_id == room.id,
-            Node._lifecycle.in_(("active", "maintenance")),
-        ).first()
-        measurement = None
-        if node:
-            measurement = db.query(Measurement).filter(
-                Measurement.node_id == node.id,
-                Measurement.room_id == room.id,
-            ).order_by(Measurement.measured_at.desc(), Measurement.id.desc()).first()
-        payload = _payload(measurement)
-        flame_data = payload.get("flame") if isinstance(payload.get("flame"), dict) else {}
-        flame_health = _health(payload, "flame", "fault")
-        sensors = [
-            {"kind": "gas", "health": _health(payload, "mq2", "fault"),
-             "value": measurement.gas_value if measurement and _health(payload, "mq2", "fault") == "ok" else None},
-            {"kind": "temperature", "health": _health(payload, "temperature", "fault"),
-             "value": measurement.temperature_value if measurement and _health(payload, "temperature", "fault") == "ok" else None},
-            {"kind": "flame", "health": flame_health,
-             "value": flame_data.get("alarm") if flame_health == "ok" and type(flame_data.get("alarm")) is bool else None},
-        ]
+    for room in rooms:
+        room_nodes = nodes_by_room[room.id]
+        primary = next((node for node in room_nodes if node["lifecycle"] in MONITORING_LIFECYCLES), None)
         incident = db.query(Incident).filter(
             Incident.room_id == room.id,
             Incident._status.in_(("open", "handling")),
-        ).order_by(Incident.started_at.desc()).first()
-        signs = incident.signs if incident and isinstance(incident.signs, list) else []
-        signs = [sign for sign in signs if sign in HAZARDS]
+        ).order_by(Incident.started_at.desc(), Incident.id.desc()).first()
+        signs = incident.signs if incident else None
+        if isinstance(signs, dict):
+            signs = signs.get("signs")
+        signs = [sign for sign in signs if isinstance(sign, str) and sign in HAZARDS] if isinstance(signs, list) else []
         results.append({
             "room": {"id": str(room.id), "name": room.name, "boardingHouseId": str(room.boarding_house_id)},
-            "node": ({"id": str(node.id), "code": node.code, "lifecycle": node.lifecycle,
-                      "connectivity": node.connectivity,
-                      "lastSeenAt": _iso(node.last_seen_at)}
-                     if node else None),
-            "sensors": sensors,
+            "nodes": room_nodes,
+            "node": {key: value for key, value in primary.items() if key != "sensors"} if primary else None,
+            "sensors": primary["sensors"] if primary else _sensors(None),
             "activeIncidentId": str(incident.id) if incident else None,
             "hazardSigns": signs,
         })
@@ -241,27 +268,23 @@ def get_room_detail(
         raise HTTPException(404, {"code": "NOT_FOUND", "message": "Không tìm thấy phòng."})
     if not can_access_room(room_id, current_user, db, audit_denied=True):
         raise HTTPException(403, {"code": "FORBIDDEN", "message": "Bạn không có quyền truy cập phòng này."})
-    node = db.query(Node).filter(Node.room_id == room.id).first()
-    measurement = db.query(Measurement).filter(
-        Measurement.node_id == node.id, Measurement.room_id == room.id
-    ).order_by(Measurement.measured_at.desc()).first() if node else None
-    payload = _payload(measurement)
-    flame_data = payload.get("flame") if isinstance(payload.get("flame"), dict) else {}
-    flame_health = _health(payload, "flame", "fault")
+    nodes = db.query(Node).filter(Node.room_id == room.id).order_by(Node.id)
+    details = []
+    for node, measurement in _latest_node_measurements(db, nodes):
+        gas, temperature, flame = _sensors(measurement)
+        details.append({
+            "node_id": node.id, "node_code": node.code, "lifecycle": node.lifecycle,
+            "connectivity": node.connectivity, "last_seen_at": _iso(node.last_seen_at),
+            "latest_measurement": ({
+                "measured_at": measurement.measured_at.isoformat(),
+                "gas_value": gas["value"], "gas_health": gas["health"],
+                "temperature_value": temperature["value"], "temperature_health": temperature["health"],
+                "flame_detected": flame["value"], "flame_health": flame["health"],
+            } if measurement else None),
+        })
     return {
         "room_id": room.id,
         "room_name": room.name,
         "boarding_house_id": room.boarding_house_id,
-        "nodes": [] if node is None else [{
-            "node_id": node.id, "node_code": node.code, "lifecycle": node.lifecycle,
-            "connectivity": node.connectivity,
-            "last_seen_at": _iso(node.last_seen_at),
-            "latest_measurement": ({"measured_at": measurement.measured_at.isoformat(),
-                                    "gas_value": measurement.gas_value if _health(payload, "mq2", "fault") == "ok" else None,
-                                    "gas_health": _health(payload, "mq2", "fault"),
-                                    "temperature_value": measurement.temperature_value if _health(payload, "temperature", "fault") == "ok" else None,
-                                    "temperature_health": _health(payload, "temperature", "fault"),
-                                    "flame_detected": flame_data.get("alarm") if flame_health == "ok" and type(flame_data.get("alarm")) is bool else None,
-                                    "flame_health": flame_health} if measurement else None),
-        }],
+        "nodes": details,
     }
